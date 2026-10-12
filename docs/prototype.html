@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MenuGit 交互原型</title>
+<style>
+  :root{
+    --accent:#0067c0; --accent-soft:#e8f1fb;
+    --ink:#1b1f27; --ink2:#5b6270; --ink3:#8b93a3;
+    --line:#e3e6ec; --bg:#eef0f4; --card:#fff;
+    --ok:#1a7f4b; --ok-soft:#e6f4ec;
+    --warn:#b7791f; --warn-soft:#fdf3e0;
+    --bad:#c0392b; --bad-soft:#fdecea;
+    --mono:ui-monospace,"SF Mono",Consolas,Menlo,monospace;
+    --radius:8px;
+  }
+  body[data-os="mac"]{ --accent:#0a84ff; --accent-soft:#e9f2ff; --bg:#e8e9ed; }
+  body[data-os="ubuntu"]{ --accent:#e95420; --accent-soft:#fdeee7; --bg:#ebe9e6; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--ink); overflow:hidden; display:flex; flex-direction:column;}
+  button{font:inherit; cursor:pointer; border:none; background:none; color:inherit;}
+  input,textarea,select{font:inherit; color:inherit;}
+  ::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-thumb{background:#c9cdd6;border-radius:4px;}
+
+  /* ───── 顶栏 ───── */
+  .topbar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:10px 18px;
+    background:#171a21; color:#e8eaf0; position:relative; z-index:50;}
+  .brand{font-weight:700; font-size:15px; letter-spacing:.3px;}
+  .brand small{font-weight:400; color:#9aa2b1; margin-left:8px; font-size:12px;}
+  .seg{display:flex; background:#242936; border-radius:8px; padding:3px; gap:2px;}
+  .seg button{padding:4px 12px; border-radius:6px; font-size:12.5px; color:#aab1c0;}
+  .seg button.on{background:var(--accent); color:#fff;}
+  .seg button.tgl.on{background:#3d5a3f; color:#9fe0b0;}
+  .topbar .gap{flex:1;}
+  .topbar .lab{font-size:12px; color:#9aa2b1;}
+
+  .hint{padding:8px 18px; font-size:13px; color:var(--ink2); background:var(--accent-soft);
+    border-bottom:1px solid var(--line);}
+  .hint b{color:var(--accent);}
+
+  /* ───── 桌面与文件管理器 ───── */
+  .desktop{flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; padding:24px;}
+  .fm{width:min(880px,96%); height:min(560px,100%); background:var(--card); border-radius:12px;
+    box-shadow:0 18px 50px rgba(15,20,30,.22); display:flex; flex-direction:column; overflow:hidden;
+    border:1px solid rgba(0,0,0,.06);}
+  .fm-bar{display:flex; align-items:center; height:42px; padding:0 12px; background:#f4f5f8; border-bottom:1px solid var(--line); gap:10px;}
+  body[data-os="ubuntu"] .fm-bar{background:#2d2d2d; color:#eee; border-bottom-color:#1d1d1d;}
+  body[data-os="mac"] .fm-bar{background:#eceded;}
+  .lights{display:flex; gap:7px;}
+  .lights i{width:12px; height:12px; border-radius:50%;}
+  .lights i:nth-child(1){background:#ff5f57;} .lights i:nth-child(2){background:#febc2e;} .lights i:nth-child(3){background:#28c840;}
+  .fm-title{flex:1; text-align:center; font-weight:600; font-size:13.5px; color:var(--ink2);}
+  body[data-os="win"] .fm-title{text-align:left;}
+  body[data-os="ubuntu"] .fm-title{color:#eee;}
+  .wbtns{display:flex; gap:4px;}
+  .wbtns span{width:30px; height:24px; display:grid; place-items:center; border-radius:6px; color:var(--ink3); font-size:12px;}
+  body[data-os="ubuntu"] .wbtns span{color:#bbb;}
+  .wbtns span:hover{background:rgba(0,0,0,.08);}
+  .wbtns .x:hover{background:#e81123; color:#fff;}
+  .only-mac{display:none;} body[data-os="mac"] .only-mac{display:flex;}
+  .only-else{display:flex;} body[data-os="mac"] .only-else{display:none;}
+
+  .fm-path{display:flex; align-items:center; gap:6px; padding:7px 14px; border-bottom:1px solid var(--line);
+    color:var(--ink2); font-size:13px; background:#fafbfc;}
+  body[data-os="ubuntu"] .fm-path{background:#333; color:#ccc; border-bottom-color:#222;}
+  .fm-path .crumb{padding:2px 8px; border-radius:5px;}
+  .fm-path .crumb:hover{background:rgba(0,0,0,.06);}
+  .repo-pill{margin-left:auto; font-size:12px; color:var(--accent); background:var(--accent-soft);
+    border:1px solid color-mix(in srgb,var(--accent) 30%,transparent); padding:2px 10px; border-radius:999px; font-weight:600;}
+  body[data-os="ubuntu"] .repo-pill{background:#3d2a22; border-color:#6b4030; color:#ff9d6f;}
+
+  .fm-main{flex:1; display:flex; min-height:0;}
+  .fm-side{width:168px; border-right:1px solid var(--line); padding:10px 8px; overflow:auto; background:#f7f8fa;}
+  body[data-os="ubuntu"] .fm-side{background:#2b2b2b; border-right-color:#1d1d1d;}
+  .fm-side h5{font-size:11.5px; color:var(--ink3); font-weight:600; margin:6px 8px 6px;}
+  body[data-os="ubuntu"] .fm-side h5{color:#888;}
+  .fm-side a{display:block; padding:5px 10px; border-radius:6px; color:var(--ink2); font-size:13px; text-decoration:none; cursor:default;}
+  body[data-os="ubuntu"] .fm-side a{color:#ccc;}
+  .fm-side a:hover{background:rgba(0,0,0,.06);}
+  .fm-side a.cur{background:var(--accent-soft); color:var(--accent); font-weight:600;}
+  body[data-os="ubuntu"] .fm-side a.cur{background:#4a3227; color:#ff9d6f;}
+
+  .fm-files{flex:1; overflow:auto; padding:10px 12px; position:relative;}
+  .frow{display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:7px; user-select:none;}
+  .frow:hover{background:var(--accent-soft);}
+  .frow .ico{font-size:17px; width:22px; text-align:center;}
+  .frow .nm{flex:1; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .frow .st{font-size:11px; padding:1px 8px; border-radius:999px; font-weight:600;}
+  .stM{background:#e8f0fe; color:#2563ae;} .stA{background:var(--ok-soft); color:var(--ok);}
+  .stD{background:var(--bad-soft); color:var(--bad);} .stU{background:#eeeaf8; color:#6b4fa3;}
+  .stC{background:var(--bad-soft); color:var(--bad); border:1px solid #efb2aa;}
+  .fm-status{display:flex; align-items:center; gap:10px; padding:6px 14px; border-top:1px solid var(--line);
+    font-size:12.5px; color:var(--ink2); background:#fafbfc;}
+  body[data-os="ubuntu"] .fm-status{background:#2d2d2d; color:#bbb; border-top-color:#1d1d1d;}
+  .fm-status .dot{width:7px; height:7px; border-radius:50%; background:var(--ok);}
+  .fm-status.conflict .dot{background:var(--bad);}
+  .fm-status .warn{color:var(--bad); font-weight:600;}
+
+  /* ───── 右键菜单 ───── */
+  .ctx{position:fixed; z-index:200; min-width:200px; background:#fff; color:var(--ink); border:1px solid var(--line);
+    border-radius:9px; box-shadow:0 12px 34px rgba(15,20,30,.22); padding:5px; font-size:13.5px; animation:pop .1s;}
+  @keyframes pop{from{opacity:0; transform:scale(.97);} to{opacity:1; transform:scale(1);}}
+  body[data-os="ubuntu"] .ctx{background:#333; border-color:#222; color:#eee;}
+  body[data-os="mac"] .ctx{background:rgba(250,250,252,.92); backdrop-filter:blur(18px);}
+  .ci{position:relative; display:flex; align-items:center; gap:9px; padding:6px 12px; border-radius:6px; cursor:pointer; white-space:nowrap;}
+  .ci:hover{background:var(--accent); color:#fff;}
+  body[data-os="mac"] .ci:hover{background:var(--accent);}
+  body[data-os="ubuntu"] .ci:hover{background:#e95420;}
+  .ci.dis{color:#b6bac4; pointer-events:none;}
+  body[data-os="ubuntu"] .ci.dis{color:#777;}
+  .ci.hot{color:var(--bad); font-weight:700;}
+  .ci.hot::after{content:"有冲突"; font-size:10px; background:var(--bad); color:#fff; border-radius:999px; padding:0 7px; margin-left:auto; font-weight:600;}
+  .ci:hover.hot{color:#fff;}
+  .ci .ic{width:17px; text-align:center; font-size:13px;}
+  .ci .sub-arrow{margin-left:auto; font-size:11px; opacity:.6;}
+  .ci .sep{height:1px; background:var(--line); margin:5px 8px; padding:0;}
+  body[data-os="ubuntu"] .ci .sep{background:#484848;}
+  .ci.brand-top{border-bottom:1px solid var(--line); margin-bottom:4px; padding-bottom:8px; font-weight:700; color:var(--ink2); pointer-events:none;}
+  .ci.brand-top:hover{background:none; color:var(--ink2);}
+  body[data-os="ubuntu"] .ci.brand-top{border-color:#484848; color:#aaa;}
+  .submenu{display:none; position:absolute; left:100%; top:-6px; min-width:200px; background:#fff; color:var(--ink);
+    border:1px solid var(--line); border-radius:9px; box-shadow:0 12px 34px rgba(15,20,30,.22); padding:5px;}
+  body[data-os="ubuntu"] .submenu{background:#333; border-color:#222; color:#eee;}
+  body[data-os="mac"] .submenu{background:rgba(250,250,252,.92); backdrop-filter:blur(18px);}
+  .ci.has-sub:hover .submenu, .ci.has-sub.open .submenu{display:block;}
+  .ctx-br{opacity:.55; font-size:12px; font-family:var(--mono); font-weight:500; margin-left:1px;}
+
+  /* ───── 功能窗口 ───── */
+  .overlay{position:fixed; inset:0; z-index:300; background:rgba(20,24,32,.36); display:none;
+    align-items:center; justify-content:center; backdrop-filter:blur(2px);}
+  .overlay.show{display:flex;}
+  .mwin{width:min(700px,94vw); max-height:86vh; background:var(--card); border-radius:12px;
+    box-shadow:0 24px 70px rgba(10,14,22,.4); display:flex; flex-direction:column; overflow:hidden; animation:pop .14s;}
+  .mbar{display:flex; align-items:center; height:44px; padding:0 14px; background:#f4f5f8; border-bottom:1px solid var(--line); flex:none;}
+  body[data-os="ubuntu"] .mbar{background:#2d2d2d; color:#eee; border-bottom-color:#1d1d1d;}
+  body[data-os="mac"] .mbar{background:#eceded;}
+  .mbar .t{flex:1; text-align:center; font-weight:600; font-size:13.5px; color:var(--ink2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  body[data-os="win"] .mbar .t{text-align:left;}
+  body[data-os="ubuntu"] .mbar .t{color:#eee;}
+  .mbar .x{width:30px; height:26px; border-radius:6px; display:grid; place-items:center; color:var(--ink3); font-size:14px;}
+  body[data-os="ubuntu"] .mbar .x{color:#bbb;}
+  .mbar .x:hover{background:#e81123; color:#fff;}
+  .mbody{padding:16px 18px; overflow:auto;}
+
+  .btn{padding:7px 18px; border-radius:7px; font-size:13.5px; font-weight:600; background:var(--accent); color:#fff;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn:disabled{opacity:.45; cursor:not-allowed;}
+  .btn.ghost{background:transparent; color:var(--ink2); border:1px solid var(--line); font-weight:500;}
+  .btn.ghost:hover{background:rgba(0,0,0,.05); filter:none;}
+  .btn.sm{padding:3px 10px; font-size:12px; border-radius:6px;}
+  .btn.danger{background:var(--bad);}
+  .btn.ok{background:var(--ok);}
+
+  .hint-bar{background:var(--warn-soft); color:var(--warn); border:1px solid #ecd9b4; border-radius:8px;
+    padding:8px 12px; font-size:13px; margin-bottom:12px;}
+  .hint-bar.red{background:var(--bad-soft); color:var(--bad); border-color:#efb2aa;}
+
+  .stat-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; font-size:13px; color:var(--ink2);}
+  .b-pill{background:var(--accent-soft); color:var(--accent); font-weight:700; border-radius:6px; padding:2px 10px; font-size:12.5px;}
+  .ab{font-weight:600;} .ab.up{color:var(--ok);} .ab.down{color:var(--accent);}
+
+  .fx-filter{width:100%; padding:6px 12px; border:1px solid var(--line); border-radius:7px; font-size:13px; margin-bottom:10px; background:#fafbfc;}
+  .fx-filter:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent); border-color:var(--accent);}
+
+  .file-list{border:1px solid var(--line); border-radius:9px; overflow:hidden; margin-bottom:12px;}
+  .f-li{display:flex; align-items:center; gap:9px; padding:8px 12px; border-bottom:1px solid var(--line); font-size:13.5px; cursor:pointer;}
+  .f-li:last-child{border-bottom:none;}
+  .f-li:hover{background:#f6f8fb;}
+  .f-li.sel{background:var(--accent-soft);}
+  .f-li.resolved{background:var(--ok-soft);}
+  .mg-hunk{border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px;}
+  .mg-hunk.decided{border-color:var(--ok);}
+  .mg-head{display:flex; justify-content:space-between; font-size:12px; color:var(--ink3); margin-bottom:8px;}
+  .mg-cols{display:flex; gap:10px;}
+  .mg-col{flex:1; min-width:0; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .mg-col .cap{font-size:11.5px; padding:5px 10px; background:#f3f4f8; color:var(--ink2); font-weight:600;}
+  .mg-col .code{font-family:var(--mono); font-size:12px; padding:8px 10px; white-space:pre-wrap; word-break:break-all; background:#fbfbfd; min-height:34px;}
+  .mg-col.pick{border-color:var(--ok); box-shadow:inset 0 0 0 1px var(--ok);}
+  .mg-col.pick .cap{background:var(--ok-soft); color:var(--ok);}
+  .mg-acts{display:flex; gap:8px; margin-top:8px;}
+  .f-li .nm{flex:1; font-family:var(--mono); font-size:12.5px; word-break:break-all;}
+  .f-li .stat{font-size:12px; color:var(--ink3); font-family:var(--mono);}
+  .f-li .acts{display:flex; gap:6px;}
+  input[type=checkbox]{width:15px; height:15px; accent-color:var(--accent); cursor:pointer;}
+  input[type=checkbox]:disabled{cursor:not-allowed;}
+  .chk-all{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink2); padding:0 2px 8px;}
+  .c-cols{display:flex; gap:14px; margin-bottom:12px; align-items:stretch;}
+  .c-left{width:290px; flex:none; min-width:0;}
+  .c-right{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .c-left .file-list{max-height:300px; overflow:auto; margin-bottom:0;}
+  .c-right .diff{flex:1; max-height:none; margin-bottom:0;}
+  .diff-title{font-size:12px; color:var(--ink3); padding:0 2px 6px; display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:24px;}
+  .diff-title b{color:var(--ink2); font-family:var(--mono); font-size:12px; word-break:break-all;}
+  .fsec{border:1px solid var(--line); border-radius:9px; padding:10px 12px; margin-bottom:12px;}
+  .fsec h5{margin:0 0 8px; font-size:12px; color:var(--ink3); font-weight:600;}
+  .frow2{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .frow2:last-child{margin-bottom:0;}
+  .frow2 label{width:64px; flex:none; font-size:12.5px; color:var(--ink2); text-align:right;}
+  .frow2 .fx-filter{margin:0;}
+
+  .diff{background:#fbfbfd; border:1px solid var(--line); border-radius:9px; padding:8px 0;
+    font-family:var(--mono); font-size:12.5px; line-height:1.55; margin-bottom:12px; overflow:auto; max-height:220px;}
+  .diff .ln{padding:0 14px; white-space:pre-wrap; word-break:break-all;}
+  .diff .add{background:#e6f4ec; color:#145c34;}
+  .diff .del{background:#fdecea; color:#a03227;}
+  .diff .hunk{color:#2563ae; background:#eef3fd; font-size:11.5px;}
+  .diff .ctxl{color:var(--ink2);}
+  .diff .ch{background:#fdecea; color:var(--bad); font-weight:700;}
+  .diff .cs{background:#fdf3e0; color:var(--warn); font-weight:700;}
+  .diff .ct{background:#fdecea; color:var(--bad); font-weight:700;}
+  .diff-empty{color:var(--ink3); font-size:12.5px; text-align:center; padding:18px 0;}
+
+  .msg-box{width:100%; min-height:64px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+    font-size:13.5px; resize:vertical; background:#fafbfc;}
+  .msg-box:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent); border-color:var(--accent);}
+  .soft-hint{font-size:12px; color:var(--warn); margin-top:4px;}
+  .win-foot{display:flex; align-items:center; gap:10px; margin-top:12px;}
+  .win-foot .author{flex:1; font-size:12.5px; color:var(--ink3);}
+  .empty{padding:40px 0; text-align:center; color:var(--ink3);}
+  .empty .big{font-size:34px; margin-bottom:8px;}
+
+  .br-item{display:flex; align-items:center; gap:9px; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13.5px;}
+  .br-item:hover{background:var(--accent-soft);}
+  .br-item .cur{font-size:10.5px; background:var(--ok); color:#fff; border-radius:999px; padding:0 8px; font-weight:700;}
+  .br-item .remote-ic{color:var(--ink3); font-size:12px;}
+  details.remote{margin-top:10px;}
+  details.remote summary{cursor:pointer; font-size:12.5px; color:var(--ink3); padding:4px 2px; user-select:none;}
+  .new-branch{display:flex; gap:8px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line);}
+  .new-branch input{flex:1; padding:6px 12px; border:1px solid var(--line); border-radius:7px; font-size:13px; background:#fafbfc;}
+  .field-err{color:var(--bad); font-size:12px; margin-top:4px; display:none;}
+
+  .log-li{border-bottom:1px solid var(--line);}
+  .log-li:last-child{border-bottom:none;}
+  .log-row{display:flex; align-items:baseline; gap:10px; padding:9px 10px; cursor:pointer; border-radius:7px; flex-wrap:wrap;}
+  .log-row:hover{background:#f6f8fb;}
+  .log-row .h{font-family:var(--mono); font-size:12px; color:var(--accent); font-weight:700;}
+  .log-row .m{flex:1; font-size:13.5px; min-width:160px;}
+  .log-row .a,.log-row .t{font-size:12px; color:var(--ink3); white-space:nowrap;}
+  .lb{font-size:10.5px; font-weight:700; border-radius:999px; padding:0 8px;}
+  .lb.head{background:var(--accent); color:#fff;}
+  .lb.br{background:#e8f0fe; color:#2563ae;}
+  .lb.org{background:#eeeaf8; color:#6b4fa3;}
+  .log-detail{background:#f7f8fa; border-radius:8px; padding:10px 14px; margin:0 6px 10px; font-size:13px;}
+  .log-detail .full{color:var(--ink2); margin-bottom:8px; white-space:pre-wrap;}
+  .log-detail .fchip{display:inline-block; font-family:var(--mono); font-size:12px; background:#fff;
+    border:1px solid var(--line); border-radius:6px; padding:2px 9px; margin:2px 4px 2px 0; cursor:pointer;}
+  .log-detail .fchip:hover{border-color:var(--accent); color:var(--accent);}
+
+  .conf-head{display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:13px; color:var(--ink2);}
+  .prog{height:8px; background:var(--line); border-radius:999px; overflow:hidden; margin:14px 0 6px;}
+  .prog i{display:block; height:100%; width:0; background:var(--accent); border-radius:999px; transition:width .2s;}
+
+  .set-row{display:flex; align-items:center; gap:12px; padding:13px 4px; border-bottom:1px solid var(--line);}
+  .set-row:last-child{border-bottom:none;}
+  .set-row .l{flex:1;}
+  .set-row .l b{font-size:13.5px; display:block;}
+  .set-row .l span{font-size:12px; color:var(--ink3);}
+  .set-row select{padding:5px 10px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:13px;}
+  .sw{position:relative; width:40px; height:22px; border-radius:999px; background:#cfd4dd; transition:.15s; flex:none;}
+  .sw::after{content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; transition:.15s;}
+  .sw.on{background:var(--accent);}
+  .sw.on::after{left:20px;}
+  .link{color:var(--accent); cursor:pointer; text-decoration:underline; font-size:12.5px;}
+
+  /* ───── Toast ───── */
+  #toasts{position:fixed; right:20px; bottom:20px; z-index:400; display:flex; flex-direction:column; gap:8px;}
+  .toast{background:#23272f; color:#eef0f4; padding:10px 16px; border-radius:9px; font-size:13px;
+    border-left:4px solid var(--accent); box-shadow:0 10px 30px rgba(0,0,0,.3); max-width:420px; animation:pop .15s;}
+  .toast.ok{border-left-color:#2ecc71;} .toast.warn{border-left-color:#f39c12;}
+  .toast.err{border-left-color:#e74c3c;}
+  .toast b{color:#fff;}
+  .toast .sub{color:#aab1c0; font-size:12px; margin-top:2px; font-family:var(--mono);}
+</style>
+</head>
+<body data-os="win">
+
+<header class="topbar">
+  <div class="brand">MenuGit<small>交互原型 v0.3</small></div>
+  <span class="lab">系统</span>
+  <div class="seg" id="segOs">
+    <button data-os="win" class="on">Windows 11</button>
+    <button data-os="mac">macOS</button>
+    <button data-os="ubuntu">Ubuntu 24.04</button>
+  </div>
+  <span class="lab">场景</span>
+  <div class="seg" id="segScene">
+    <button data-scene="repo" class="on">仓库内 my-project</button>
+    <button data-scene="norepo">非仓库 文档</button>
+  </div>
+  <span class="gap"></span>
+  <span class="lab">演示</span>
+  <div class="seg">
+    <button class="tgl on" id="tglConflict" title="开启后，下一次「拉取」将产生合并冲突">模拟拉取冲突</button>
+    <button class="tgl" id="tglNoGit" title="开启后，点击任意菜单项提示未检测到 Git">未检测到 Git</button>
+    <button id="btnReset">重置</button>
+  </div>
+</header>
+
+<div class="hint" id="hint">👉 在下方文件管理器中<b>右键点击</b>任意文件夹 / 文件 / 空白处，打开 <b>MenuGit</b> 子菜单</div>
+
+<main class="desktop">
+  <div class="fm">
+    <div class="fm-bar">
+      <div class="lights only-mac"><i></i><i></i><i></i></div>
+      <div class="fm-title" id="fmTitle">my-project</div>
+      <div class="wbtns only-else"><span>─</span><span>□</span><span class="x">✕</span></div>
+    </div>
+    <div class="fm-path" id="fmPath"></div>
+    <div class="fm-main">
+      <aside class="fm-side" id="fmSide"></aside>
+      <div class="fm-files" id="fmFiles"></div>
+    </div>
+    <div class="fm-status" id="fmStatus"></div>
+  </div>
+</main>
+
+<div class="overlay" id="overlay"><div class="mwin" id="mwin"></div></div>
+<div id="toasts"></div>
+
+<script>
+/* ══════════ 状态 ══════════ */
+const S = {
+  os:'win', scene:'repo',
+  noGit:false, conflictSim:true, pulled:false,
+  busy:false,
+  branch:'main', ahead:1, behind:0,
+  files:[
+    {name:'src/app.py',   st:'M'},
+    {name:'src/utils.py', st:'A'},
+    {name:'docs/old.md',  st:'D'},
+    {name:'notes.txt',    st:'U'},
+  ],
+  conflict:null,   // {files:[], resolved:Set}
+  settings:{ lang:'system', checkNew:false },
+};
+const ST = {M:['修改','stM'],A:['新增','stA'],D:['删除','stD'],U:['未跟踪','stU'],C:['冲突','stC']};
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const randHash = () => Math.random().toString(16).slice(2,9);
+const ICON_BRANCH = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px"><circle cx="4" cy="3.2" r="1.9"/><circle cx="4" cy="12.8" r="1.9"/><circle cx="12" cy="3.2" r="1.9"/><path d="M4 5.1v5.8M12 5.1c0 3-2.2 3.6-4.6 4"/></svg>';
+
+/* ══════════ 数据 ══════════ */
+const DIFFS = {
+  'src/app.py':[
+    ['hunk','@@ -12,7 +12,9 @@ def main()'],
+    ['ctxl','def load_config():'],
+    ['ctxl','    path = os.environ.get("APP_CONFIG")'],
+    ['del','    if not path:'],
+    ['del','        path = "config.ini"'],
+    ['add','    if not path:'],
+    ['add','        raise ConfigError("missing APP_CONFIG")'],
+    ['add','    logger.debug("using config: %s", path)'],
+    ['ctxl','    return parse(path)'],
+  ],
+  'src/utils.py':[
+    ['hunk','@@ -0,0 +1,8 @@'],
+    ['add','"""通用工具函数"""'],
+    ['add','import json'],
+    ['add',''],
+    ['add','def to_json(obj, indent=2):'],
+    ['add','    return json.dumps(obj, ensure_ascii=False, indent=indent)'],
+  ],
+  'docs/old.md':[
+    ['hunk','@@ -1,6 +0,0 @@'],
+    ['del','# 旧版说明（已废弃）'],
+    ['del','本文档描述 v1.x 的安装方式，'],
+    ['del','内容已迁移至 docs/install.md。'],
+  ],
+  'notes.txt':[
+    ['hunk','@@ -0,0 +1,3 @@'],
+    ['add','随手记：'],
+    ['add','- 下周看一下缓存策略'],
+  ],
+};
+const CONF_FILES = {
+  'src/config.py':{ hunks:[
+    { note:'重试次数', ctxBefore:['TIMEOUT = 30'],
+      local:['RETRIES = 3'], remote:['RETRIES = 5'],
+      ctxAfter:['', 'LOG_LEVEL = "info"'] },
+  ]},
+  'README.md':{ hunks:[
+    { note:'项目说明', ctxBefore:['# my-project'],
+      local:['本地开发版说明：需要 Python 3.10+。'],
+      remote:['团队版说明：需要 Python 3.12+，详见 docs/install.md。'],
+      ctxAfter:[] },
+  ]},
+};
+let LOG = [
+  {h:'a1b2c3d', m:'feat: 支持导出为 PDF', a:'yxw', t:'3 小时前', files:['src/export.py','src/app.py'], heads:['HEAD','main','origin/main']},
+  {h:'9f8e7d6', m:'fix: 修复空配置时的崩溃', a:'yxw', t:'昨天', files:['src/app.py'], heads:[]},
+  {h:'7c6b5a4', m:'docs: 更新安装说明', a:'Alice', t:'2 天前', files:['docs/install.md','README.md'], heads:[]},
+  {h:'5e4d3c2', m:'refactor: 拆分配置模块', a:'yxw', t:'3 天前', files:['src/config.py','src/app.py'], heads:[]},
+  {h:'3a2b1c0', m:'chore: 升级依赖', a:'Bob', t:'5 天前', files:['requirements.txt'], heads:[]},
+  {h:'1f2e3d4', m:'feat: 增加命令行入口', a:'yxw', t:'1 周前', files:['src/cli.py'], heads:[]},
+  {h:'9a8b7c6', m:'test: 补充 utils 单测', a:'Alice', t:'1 周前', files:['tests/test_utils.py'], heads:[]},
+  {h:'8d7c6b5', m:'init: 初始化项目', a:'yxw', t:'2 周前', files:['README.md','src/app.py'], heads:[]},
+];
+const LOG_OTHER = [
+  {h:'6c5b4a3', m:'wip: 登录页骨架', a:'Alice', t:'4 天前', files:['src/login.vue'], heads:['feature-login'], other:true},
+  {h:'2b3c4d5', m:'chore: 同步 CI 配置', a:'Bob', t:'6 天前', files:['.ci.yml'], heads:['dev'], other:true},
+];
+const BR_LOCAL = ['main','dev','feature-login'];
+const BR_REMOTE = ['origin/dev','origin/feature-login','origin/release-1.0'];
+
+/* ══════════ 通用 UI ══════════ */
+const $ = s => document.querySelector(s);
+function toast(msg, type='', sub=''){
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = msg + (sub ? '<div class="sub">'+esc(sub)+'</div>' : '');
+  $('#toasts').appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),320); }, 3200);
+}
+const GIT_HINT = { win:'winget install --id Git.Git', mac:'brew install git', ubuntu:'sudo apt install git' };
+function busy(blockConflict=true){
+  if (S.noGit){ toast('未检测到 Git','warn','安装指引：' + GIT_HINT[S.os]); return false; }
+  if (S.busy){ toast('正在执行其他操作，请稍候','warn'); return false; }
+  if (blockConflict && S.conflict){ toast('存在未完成的合并，请先<b>解决冲突</b>或<b>中止合并</b>','warn'); return false; }
+  return true;
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+/* ══════════ 文件管理器渲染 ══════════ */
+const SIDES = {
+  win:{title:'快速访问', items:['主文件夹','图库','桌面','下载','文档'], cur:'文档'},
+  mac:{title:'个人收藏', items:['AirDrop','最近项目','应用程序','桌面','文档','下载'], cur:'文档'},
+  ubuntu:{title:'收藏', items:['主文件夹','文档','下载','音乐','视频'], cur:'文档'},
+};
+function renderFm(){
+  document.body.dataset.os = S.os;
+  const repo = S.scene==='repo';
+  $('#fmTitle').textContent = repo ? 'my-project' : '文档';
+  const crumbs = repo ? ['🏠','code','<b>my-project</b>'] : ['🏠','<b>文档</b>'];
+  $('#fmPath').innerHTML = crumbs.map(c=>'<span class="crumb">'+c+'</span>').join('<span>›</span>')
+    + (repo ? '<span class="repo-pill">'+ICON_BRANCH+' '+esc(S.branch)+'</span>' : '');
+  const sd = SIDES[S.os];
+  $('#fmSide').innerHTML = '<h5>'+sd.title+'</h5>' + sd.items.map(i=>
+    '<a class="'+(i===sd.cur?'cur':'')+'">'+i+'</a>').join('');
+  const items = repo
+    ? [ {ico:'📁', nm:'src'}, {ico:'📁', nm:'docs'},
+        ...S.files.map(f=>({ico:f.name.endsWith('.py')||f.name.endsWith('.txt')?'📄':'📄', nm:f.name, st:f.st})),
+        {ico:'📄', nm:'README.md'} ]
+    : [ {ico:'📁', nm:'项目备份'}, {ico:'📁', nm:'照片'}, {ico:'📄', nm:'简历.pdf'}, {ico:'📄', nm:'旅行计划.txt'} ];
+  $('#fmFiles').innerHTML = items.map(i=>{
+    const st = i.st ? '<span class="st '+ST[i.st][1]+'">'+ST[i.st][0]+'</span>' : '';
+    return '<div class="frow" data-item="'+esc(i.nm)+'"><span class="ico">'+i.ico+'</span><span class="nm">'+esc(i.nm)+'</span>'+st+'</div>';
+  }).join('');
+  renderStatus();
+}
+function renderStatus(){
+  const el = $('#fmStatus'); el.classList.remove('conflict');
+  if (S.scene==='norepo'){ el.innerHTML = '<span class="dot"></span>未初始化 Git 仓库 · 右键可初始化或克隆'; return; }
+  if (S.conflict){ el.classList.add('conflict');
+    el.innerHTML = '<span class="dot"></span><span class="warn">⚠ 合并冲突中（'+S.conflict.resolved.size+'/'+S.conflict.files.length+' 已解决）</span><span>右键 → 解决冲突</span>'; return; }
+  const n = S.files.length;
+  const sync = S.ahead>0 ? '↑'+S.ahead : (S.behind>0 ? '↓'+S.behind : '已同步');
+  el.innerHTML = '<span class="dot"></span>分支 '+esc(S.branch)+' · '+sync+' · '+n+' 个变更 · MenuGit 就绪';
+}
+
+/* ══════════ 右键菜单 ══════════ */
+function closeCtx(){ document.querySelectorAll('.ctx').forEach(e=>e.remove()); }
+function openCtx(x, y){
+  closeCtx();
+  const repo = S.scene==='repo';
+  const m = document.createElement('div'); m.className='ctx';
+  const sep = '<div class="ci" style="pointer-events:none;padding:0"><span class="sep" style="display:block;width:100%"></span></div>';
+  let items = '<div class="ci brand-top" style="pointer-events:none">MenuGit'+(repo?'<span class="ctx-br">（'+esc(S.branch)+'）</span>':'')+'</div>';
+  if (repo){
+    items += [
+      ['commit','📝','提交…'],
+      ['pull','⬇','拉取'],
+      ['push','⬆','推送'],
+      ['branch',ICON_BRANCH,'分支…'],
+      ['log','📜','日志…'],
+      ['discard','↩','放弃修改…'],
+    ].map(a=>'<div class="ci" data-act="'+a[0]+'"><span class="ic">'+a[1]+'</span>'+a[2]+'</div>').join('');
+    items += '<div class="ci '+(S.conflict?'hot':'dis')+'" data-act="conflict"><span class="ic">⚡</span>解决冲突…</div>';
+  } else {
+    items += [
+      ['init','⊕','在此初始化 Git 仓库'],
+      ['clone','📥','克隆仓库到此处…'],
+    ].map(a=>'<div class="ci" data-act="'+a[0]+'"><span class="ic">'+a[1]+'</span>'+a[2]+'</div>').join('');
+  }
+  items += sep + '<div class="ci" data-act="settings"><span class="ic">⚙</span>设置…</div>';
+  items = '<div class="ci">📂 打开</div>' + sep +
+    '<div class="ci has-sub"><span class="ic">'+ICON_BRANCH+'</span>MenuGit'+(repo?'<span class="ctx-br">（'+esc(S.branch)+'）</span>':'')+'<span class="sub-arrow">▸</span>'+
+    '<div class="submenu">'+items+'</div></div>';
+  m.innerHTML = items;
+  document.body.appendChild(m);
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.min(x, innerWidth - w - 230) + 'px';
+  m.style.top  = Math.min(y, innerHeight - h - 270) + 'px';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ctx')) { closeCtx(); return; }
+  const ci = e.target.closest('.ctx .ci');
+  if (!ci || ci.classList.contains('dis') || ci.classList.contains('brand-top')) return;
+  if (ci.classList.contains('has-sub')){ ci.classList.toggle('open'); return; }
+  if (!ci.dataset.act) return;
+  closeCtx();
+  const act = ci.dataset.act;
+  if (S.noGit){ toast('未检测到 Git','warn','安装指引：' + GIT_HINT[S.os]); return; }
+  if (act==='commit')  return openWinCommit();
+  if (act==='pull')    return doPull();
+  if (act==='push')    return doPush();
+  if (act==='branch')  return openWinBranch();
+  if (act==='log')     return openWinLog();
+  if (act==='discard') return openWinDiscard();
+  if (act==='conflict')return openWinConflict();
+  if (act==='init')    return openWinInit();
+  if (act==='clone')   return openWinClone();
+  if (act==='settings')return openWinSettings();
+});
+document.addEventListener('contextmenu', e => { if (!e.target.closest('#fmFiles')) closeCtx(); });
+$('#fmFiles').addEventListener('contextmenu', e => {
+  e.preventDefault();
+  openCtx(e.clientX, e.clientY);
+});
+$('#fmFiles').addEventListener('click', e => {
+  const row = e.target.closest('.frow');
+  if (row && S.scene==='repo' && S.conflict && S.conflict.files.includes(row.dataset.item)) openWinConflict();
+});
+
+/* ══════════ 窗口框架 ══════════ */
+function openWin(title, bodyHTML, width){
+  const ov = $('#overlay');
+  $('#mwin').style.width = width || '';
+  $('#mwin').innerHTML =
+    '<div class="mbar">' + (S.os==='mac' ? '<div class="lights"><i></i><i></i><i></i></div>' : '<span style="width:8px"></span>') +
+    '<div class="t">'+title+'</div><button class="x" data-close>✕</button></div>' +
+    '<div class="mbody">'+bodyHTML+'</div>';
+  ov.classList.add('show');
+}
+function closeWin(){
+  $('#overlay').classList.remove('show');
+  if (retCommit){ retCommit = false; openWinCommit(false); }
+}
+$('#overlay').addEventListener('click', e => { if (e.target.id==='overlay' || e.target.closest('[data-close]')) closeWin(); });
+document.addEventListener('keydown', e => { if (e.key==='Escape'){ closeWin(); closeCtx(); } });
+
+/* ══════════ 差异视图 ══════════ */
+function diffHTML(lines){
+  return '<div class="diff">' + lines.map(l=>'<div class="ln '+l[0]+'">'+esc(l[1])+'</div>').join('') + '</div>';
+}
+function diffOf(name){
+  if (CONFLICT_DIFFS[name]) return CONFLICT_DIFFS[name];
+  if (DIFFS[name]) return DIFFS[name];
+  return [ ['hunk','@@ -1,2 +1,4 @@'], ['ctxl','/* '+name+' */'], ['add','+ 新增内容（演示）'] ];
+}
+
+/* ══════════ FM-02 提交主窗口 ══════════ */
+let commitSel = null, commitFilter = '', commitChecked = {}, commitMsg = '', retCommit = false;
+function defChecked(f){
+  if (f.st==='C') return false;
+  if (f.st==='A' || f.st==='U') return S.settings.checkNew;
+  return true;
+}
+function commitStats(f){
+  if (f.st==='D') return '';
+  const n = (f.name.length * 7) % 40 + 6;
+  return f.st==='D' ? '' : ('+'+n + (f.st!=='A'&&f.st!=='U' ? ' −'+(n%9+1) : ''));
+}
+function openWinCommit(reset=true){
+  if (!busy()) return;
+  if (reset){ commitSel = null; commitFilter = ''; commitChecked = {}; commitMsg = ''; }
+  openWin('提交 · my-project', '<div id="commitBody"></div>', 'min(940px,94vw)');
+  renderCommitBody();
+}
+function renderCommitBody(){
+  const el = $('#commitBody'); if (!el) return;
+  const sync = S.ahead>0 ? '领先 origin/'+S.branch+' '+S.ahead+' 个提交' : (S.behind>0 ? '落后 '+S.behind : '与 origin/'+S.branch+' 同步');
+  let html = '<div class="stat-head"><span class="b-pill" style="cursor:pointer" title="点击切换或新建分支，提交将落在所选分支上" onclick="openWinBranch(true)">'+ICON_BRANCH+' '+esc(S.branch)+' ▾</span><span class="ab up">'+sync+'</span>';
+  if (S.ahead>0 && !S.conflict) html += '<button class="btn sm" id="cPushBtn" style="margin-left:auto">↑ 推送</button>';
+  else if (!S.conflict) html += '<span style="margin-left:auto;color:var(--ok);font-weight:600;font-size:12.5px">✔ 已同步</span>';
+  html += '</div>';
+  if (S.conflict) html += '<div class="hint-bar red">存在 '+S.conflict.files.length+' 个冲突文件，请先 <a class="link" onclick="openWinConflict()">解决冲突</a> 再提交。</div>';
+  const list = S.files.filter(f => f.name.includes(commitFilter));
+  S.files.forEach(f => { if (!(f.name in commitChecked)) commitChecked[f.name] = defChecked(f); });
+  if (!S.files.length){
+    html += '<div class="empty"><div class="big">✔</div>工作区干净，'+ (S.ahead>0 ? '领先 origin/'+S.branch+' '+S.ahead+' 个提交，点击右上角「↑ 推送」发布' : '与 origin/'+S.branch+' 同步，等待下一次修改')+'</div>';
+  } else {
+    html += '<input class="fx-filter" id="cFilter" placeholder="按文件名过滤…" value="'+esc(commitFilter)+'">';
+    const sel0 = list.filter(f=>f.st!=='C');
+    const allOn = sel0.length>0 && sel0.every(f=>commitChecked[f.name]);
+    html += '<label class="chk-all"><input type="checkbox" id="cAll" '+(allOn?'checked':'')+'>全选（Ctrl+A）'+(sel0.length!==list.length?'，不含冲突文件':'')+'</label>';
+    html += '<div class="c-cols"><div class="c-left">';
+    html += '<div class="file-list">' + list.map(f=>{
+      const dis = f.st==='C' ? 'disabled title="冲突文件不可提交"' : '';
+      return '<div class="f-li'+(commitSel===f.name?' sel':'')+'" data-f="'+esc(f.name)+'">'+
+        '<input type="checkbox" data-chk="'+esc(f.name)+'" '+(commitChecked[f.name]?'checked':'')+' '+dis+'>'+
+        '<span class="st '+ST[f.st][1]+'">'+ST[f.st][0]+'</span>'+
+        '<span class="nm">'+esc(f.name)+'</span><span class="stat">'+commitStats(f)+'</span></div>';
+    }).join('') + '</div>';
+    html += '</div><div class="c-right">';
+    const selFile = commitSel && S.files.find(f=>f.name===commitSel);
+    html += '<div class="diff-title">' + (selFile
+      ? '<b>'+esc(selFile.name)+'</b><span>'+ (selFile.st==='D' ? '文件已删除' : commitStats(selFile)) +'</span>'
+      : '<span>差异预览</span>') + '</div>';
+    html += selFile ? diffHTML(diffOf(selFile.name)) : '<div class="diff"><div class="diff-empty">点击左侧文件查看差异</div></div>';
+    html += '</div></div>';
+    html += '<textarea class="msg-box" id="cMsg" placeholder="提交信息（必填）…">'+esc(commitMsg)+'</textarea><div class="soft-hint" id="cHint" style="display:none">提示：首行建议不超过 50 字符（不强制）</div>';
+    html += '<div class="win-foot"><span class="author">作者：yxw &lt;yxw@example.com&gt;（来自系统 Git 配置）</span>'+
+      '<button class="btn ghost" data-close>取消</button><button class="btn" id="cBtn" disabled>提交</button></div>';
+  }
+  el.innerHTML = html;
+  const cf = $('#cFilter');
+  if (cf) cf.oninput = e => { commitFilter = e.target.value; renderCommitBody(); };
+  const msg = $('#cMsg');
+  if (msg){
+    msg.oninput = e => {
+      commitMsg = e.target.value;
+      $('#cHint').style.display = commitMsg.split('\n')[0].length > 50 ? 'block' : 'none';
+      updateCommitBtn();
+    };
+    updateCommitBtn();
+  }
+  el.querySelectorAll('[data-chk]').forEach(c => c.onchange = () => { commitChecked[c.dataset.chk] = c.checked; updateCommitBtn(); });
+  const cAll = $('#cAll');
+  if (cAll) cAll.onchange = () => {
+    list.forEach(f => { if (f.st!=='C') commitChecked[f.name] = cAll.checked; });
+    el.querySelectorAll('[data-chk]').forEach(c => { const f = S.files.find(x=>x.name===c.dataset.chk); if (f && f.st!=='C') c.checked = cAll.checked; });
+    updateCommitBtn();
+  };
+  el.onkeydown = e => {
+    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='a' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){
+      const box = $('#cAll');
+      if (box){ e.preventDefault(); box.checked = !box.checked; box.onchange(); }
+    }
+  };
+  el.querySelectorAll('[data-f]').forEach(n => n.onclick = e => {
+    if (e.target.type === 'checkbox') return;
+    commitSel = n.dataset.f; renderCommitBody();
+  });
+  const pb = $('#cPushBtn');
+  if (pb) pb.onclick = () => doPush(true);
+  const go = $('#cBtn');
+  if (go) go.onclick = doCommit;
+}
+function updateCommitBtn(){
+  const btn = $('#cBtn'); if (!btn) return;
+  const n = checkedCount();
+  const msg = (commitMsg||'').trim();
+  btn.disabled = n===0 || !msg || !!S.conflict;
+  btn.textContent = n ? '提交 '+n+' 个文件' : '提交';
+  const box = $('#cAll');
+  if (box){
+    const sel = S.files.filter(f=>f.st!=='C');
+    const on = sel.filter(f=>commitChecked[f.name]).length;
+    box.checked = sel.length>0 && on===sel.length;
+    box.indeterminate = on>0 && on<sel.length;
+  }
+}
+function checkedCount(){
+  const boxes = document.querySelectorAll('#commitBody [data-chk]');
+  return [...boxes].filter(b=>b.checked).length;
+}
+async function doCommit(){
+  if (!busy()) return;
+  const msg = (commitMsg||'').trim();
+  const names = [...document.querySelectorAll('#commitBody [data-chk]')].filter(b=>b.checked).map(b=>b.dataset.chk);
+  if (!names.length || !msg || S.conflict) return;
+  const btn = $('#cBtn'); btn.disabled = true; btn.textContent = '提交中…';
+  S.busy = true; await sleep(800); S.busy = false;
+  const h = randHash();
+  LOG.forEach(c => c.heads = c.heads.filter(x=>x!=='HEAD'));
+  LOG.unshift({h, m:msg.split('\n')[0], a:'yxw', t:'刚刚', files:names, heads:['HEAD',S.branch]});
+  S.files = S.files.filter(f => !names.includes(f.name));
+  S.ahead++;
+  toast('已提交 <b>'+h+'</b> · '+names.length+' 个文件','ok');
+  commitSel = null; commitChecked = {}; commitMsg = '';
+  renderFm(); renderCommitBody();
+  openWinPush(S.files.length > 0);
+}
+
+/* ══════════ FM-03/04 拉取与推送 ══════════ */
+function doPull(){
+  if (!busy()) return;
+  openWinPull();
+}
+function openWinPull(){
+  openWin('拉取 · my-project', '<div id="plBody"></div>', 'min(540px,94vw)');
+  renderPullBody();
+}
+function renderPullBody(){
+  const el = $('#plBody'); if (!el) return;
+  const sug = ['origin/'+S.branch].concat(BR_REMOTE.filter(b=>b!=='origin/'+S.branch));
+  el.innerHTML =
+    '<div class="fsec"><h5>本地</h5>'+
+    '<div class="frow2"><label>分支(L)</label><span class="b-pill">'+ICON_BRANCH+' '+esc(S.branch)+'</span>'+
+    '<span class="ab up" style="margin-left:4px">'+(S.behind>0 ? '落后 origin/'+esc(S.branch)+' '+S.behind+' 个提交' : '与 origin/'+esc(S.branch)+' 同步')+'</span></div></div>'+
+    '<div class="fsec"><h5>来源</h5>'+
+    '<div class="frow2"><label>远端(M)</label><span class="b-pill" style="background:var(--line);color:var(--ink2)">origin</span>'+
+    '<span style="font-size:12px;color:var(--ink3)">轻量版仅支持默认远端</span></div>'+
+    '<div class="frow2"><label>分支(R)</label><input class="fx-filter" id="plTarget" list="plDl" style="flex:1" value="origin/'+esc(S.branch)+'" spellcheck="false">'+
+    '<datalist id="plDl">'+sug.map(r=>'<option value="'+r+'">').join('')+'</datalist></div>'+
+    '<div class="soft-hint" style="margin-top:8px">拉取 = 获取并合并该远端分支到当前分支；产生冲突时会进入解决冲突流程</div></div>'+
+    '<div class="win-foot"><span class="author">凭证来自系统 Git 配置</span><button class="btn ghost" data-close>取消</button><button class="btn" id="plGo">拉取</button></div>';
+  el.querySelector('#plGo').onclick = () => {
+    const v = el.querySelector('#plTarget').value.trim().replace(/^origin\//,'');
+    if (!v){ toast('请输入来源分支名','warn'); return; }
+    if (/[\s\u4e00-\u9fa5]/.test(v) || /[^a-zA-Z0-9_\-\/.]/.test(v)){ toast('分支名不能含空格、中文或特殊字符','warn'); return; }
+    closeWin(); pullFrom(v);
+  };
+}
+async function pullFrom(src){
+  if (!busy()) return;
+  S.busy = true; renderStatus(); toast('正在从 origin/'+esc(src)+' 拉取…');
+  await sleep(900);
+  S.busy = false;
+  if (S.conflictSim){
+    S.conflictSim = false; $('#tglConflict').classList.remove('on');
+    const cf = ['src/config.py','README.md'];
+    S.conflict = { files: cf, resolved:new Set(), choices:{} };
+    cf.forEach(n => S.conflict.choices[n] = CONF_FILES[n].hunks.map(()=>null));
+    cf.forEach(n => S.files.push({name:n, st:'C'}));
+    renderFm(); toast('拉取 origin/'+esc(src)+' 产生 <b>2 个冲突</b>','err','已打开解决冲突'); openWinConflict();
+    return;
+  }
+  if (!S.pulled){
+    S.pulled = true; S.behind = 0;
+    toast('拉取完成：从 origin/'+esc(src)+' 拉入 1 个提交，更新 2 个文件','ok', src!==S.branch ? '来源与当前分支不同名：'+esc(src)+' → '+esc(S.branch) : '');
+  }
+  else toast('已是最新','ok');
+  if ($('#commitBody')) renderCommitBody();
+  renderStatus();
+}
+function doPush(fromCommit){
+  if (!busy()) return;
+  if (S.ahead===0){ toast('没有待推送的提交，已同步'); return; }
+  openWinPush(fromCommit);
+}
+function openWinPush(fromCommit){
+  retCommit = !!fromCommit;
+  openWin('推送 · my-project', '<div id="psBody"></div>', 'min(540px,94vw)');
+  renderPushBody();
+}
+function renderPushBody(){
+  const el = $('#psBody'); if (!el) return;
+  const sug = ['origin/'+S.branch].concat(BR_REMOTE.filter(b=>b!=='origin/'+S.branch));
+  el.innerHTML =
+    '<div class="fsec"><h5>本地</h5>'+
+    '<div class="frow2"><label>分支(L)</label><span class="b-pill">'+ICON_BRANCH+' '+esc(S.branch)+'</span>'+
+    '<span class="ab up" style="margin-left:4px">领先 origin/'+esc(S.branch)+' '+S.ahead+' 个提交</span></div></div>'+
+    '<div class="fsec"><h5>目标</h5>'+
+    '<div class="frow2"><label>远端(M)</label><span class="b-pill" style="background:var(--line);color:var(--ink2)">origin</span>'+
+    '<span style="font-size:12px;color:var(--ink3)">轻量版仅支持默认远端</span></div>'+
+    '<div class="frow2"><label>分支(R)</label><input class="fx-filter" id="psTarget" list="psDl" style="flex:1" value="origin/'+esc(S.branch)+'" spellcheck="false">'+
+    '<datalist id="psDl">'+sug.map(r=>'<option value="'+r+'">').join('')+'</datalist></div>'+
+    '<div class="soft-hint" id="psTip" style="margin-top:8px">默认推送到上游分支；目标在远端不存在时，将创建该远端分支并设为上游</div></div>'+
+    '<div class="win-foot"><span class="author">凭证来自系统 Git 配置</span><button class="btn ghost" data-close>取消</button><button class="btn" id="psGo">推送</button></div>';
+  const go = el.querySelector('#psGo');
+  const inp = el.querySelector('#psTarget');
+  inp.oninput = () => {
+    const v = inp.value.trim().replace(/^origin\//,'');
+    const known = sug.some(s => s === inp.value.trim());
+    el.querySelector('#psTip').innerHTML = known
+      ? '推送到已存在的远端分支 <b>origin/'+esc(v||S.branch)+'</b>'
+      : '目标远端不存在时，将<b>创建远端分支 origin/'+esc(v||'…')+'</b>并设为上游';
+  };
+  go.onclick = () => {
+    const v = inp.value.trim().replace(/^origin\//,'');
+    if (!v){ toast('请输入目标分支名','warn'); return; }
+    if (/[\s\u4e00-\u9fa5]/.test(v) || /[^a-zA-Z0-9_\-\/.]/.test(v)){ toast('分支名不能含空格、中文或特殊字符','warn'); return; }
+    closeWin(); pushTo(v);
+  };
+}
+async function pushTo(target){
+  if (!busy()) return;
+  const pb0 = $('#cPushBtn'); if (pb0) pb0.disabled = true;
+  S.busy = true; renderStatus(); toast('正在推送到 origin/'+esc(target)+'…');
+  await sleep(800);
+  S.busy = false; S.ahead = 0;
+  toast('已推送到 <b>origin/'+esc(target)+'</b>','ok', target!==S.branch ? '远端与本地分支不同名：'+esc(S.branch)+' → '+esc(target) : '');
+  renderStatus();
+  if ($('#commitBody')) renderCommitBody();
+}
+
+/* ══════════ FM-05 分支 ══════════ */
+function openWinBranch(fromCommit){
+  retCommit = !!fromCommit;
+  openWin('分支 · my-project', '<div id="brBody"></div>');
+  renderBranchBody();
+}
+function renderBranchBody(){
+  const el = $('#brBody'); if (!el) return;
+  el.innerHTML = '<div class="stat-head"><span class="b-pill">'+ICON_BRANCH+' 当前：'+esc(S.branch)+'</span></div>'+
+    '<h4 style="margin-bottom:6px;font-size:13px;color:var(--ink2)">本地分支（点击切换）</h4>' +
+    BR_LOCAL.map(b=>'<div class="br-item" data-br="'+b+'">'+ICON_BRANCH+' '+b+(b===S.branch?'<span class="cur">当前</span>':'')+'</div>').join('') +
+    '<details class="remote"><summary>远端分支（点击检出为本地）</summary>' +
+    BR_REMOTE.map(b=>'<div class="br-item" data-br="'+b+'"><span class="remote-ic">☁</span>'+b+'</div>').join('') + '</details>' +
+    '<div class="new-branch"><input id="nbName" placeholder="新建分支名称，如 feature-search"><button class="btn" id="nbBtn">创建并切换</button></div>'+
+    '<div class="field-err" id="nbErr"></div>';
+  el.querySelectorAll('[data-br]').forEach(n => n.onclick = () => switchBranch(n.dataset.br, n.dataset.br.startsWith('origin/')));
+  el.querySelector('#nbBtn').onclick = () => {
+    const v = el.querySelector('#nbName').value.trim();
+    const err = el.querySelector('#nbErr');
+    if (!v){ err.textContent='分支名不能为空'; err.style.display='block'; return; }
+    if (/[\s\u4e00-\u9fa5]/.test(v) || /[^a-zA-Z0-9_\-\/.]/.test(v)){ err.textContent='分支名不能含空格、中文或特殊字符'; err.style.display='block'; return; }
+    if (BR_LOCAL.includes(v)){ err.textContent='分支已存在'; err.style.display='block'; return; }
+    err.style.display='none';
+    BR_LOCAL.push(v); switchBranch(v, false, true);
+  };
+}
+async function switchBranch(name, isRemote, isNew){
+  if (!busy()) return;
+  if (isRemote) name = name.replace('origin/','');
+  S.busy = true; await sleep(500); S.busy = false;
+  S.branch = name;
+  toast(isNew ? '已创建并切换到 <b>'+esc(name)+'</b>' : (isRemote ? '已检出并跟踪 <b>'+esc(name)+'</b>' : '已切换到 <b>'+esc(name)+'</b>'), 'ok');
+  renderFm();
+  if (retCommit){ closeWin(); return; }
+  if ($('#brBody')) renderBranchBody();
+  if ($('#commitBody')) renderCommitBody();
+  if ($('#logBody')) renderLogBody();
+}
+
+/* ══════════ FM-06 日志 ══════════ */
+let logFilter='', logAll=false, logOpen=null, logFile=null;
+function openWinLog(){
+  logFilter=''; logAll=false; logOpen=null; logFile=null;
+  openWin('日志 · my-project', '<div id="logBody"></div>');
+  renderLogBody();
+}
+function renderLogBody(){
+  const el = $('#logBody'); if (!el) return;
+  const list = LOG.filter(c => !logAll && c.other ? false : (c.m.toLowerCase().includes(logFilter) || c.a.toLowerCase().includes(logFilter)))
+    .concat(logAll ? LOG_OTHER.filter(c=>c.m.includes(logFilter)||c.a.includes(logFilter)) : []);
+  let html = '<input class="fx-filter" id="lFilter" placeholder="按提交信息或作者过滤…" value="'+esc(logFilter)+'">'+
+    '<label class="chk-all" style="margin-bottom:6px"><input type="checkbox" id="lAll" '+(logAll?'checked':'')+'>显示所有分支</label>'+
+    '<div class="file-list" style="max-height:330px;overflow:auto">';
+  list.forEach(c=>{
+    const badges = c.heads.map(h=>'<span class="lb '+(['HEAD'].includes(h)?'head':'org')+'">'+h+'</span>').join(' ');
+    html += '<div class="log-li"><div class="log-row" data-log="'+c.h+'"><span class="h">'+c.h+'</span><span class="m">'+esc(c.m)+'</span>'+badges+
+      '<span class="a">'+esc(c.a)+'</span><span class="t">'+c.t+'</span></div>';
+    if (logOpen===c.h){
+      html += '<div class="log-detail"><div class="full">'+esc(c.m)+'</div>'+
+        c.files.map(f=>'<span class="fchip" data-lf="'+esc(f)+'">'+esc(f)+'</span>').join('')+
+        (logFile ? diffHTML(diffOf(logFile)) : '<div style="color:var(--ink3);font-size:12px;padding-top:6px">点击文件查看该提交的差异</div>')+'</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+  el.querySelector('#lFilter').oninput = e => { logFilter = e.target.value.toLowerCase(); renderLogBody(); };
+  el.querySelector('#lAll').onchange = e => { logAll = e.target.checked; renderLogBody(); };
+  el.querySelectorAll('[data-log]').forEach(n => n.onclick = () => { logOpen = logOpen===n.dataset.log ? null : n.dataset.log; logFile=null; renderLogBody(); });
+  el.querySelectorAll('[data-lf]').forEach(n => n.onclick = ev => { ev.stopPropagation(); logFile = n.dataset.lf; renderLogBody(); });
+}
+
+/* ══════════ FM-07 放弃修改 ══════════ */
+function openWinDiscard(){
+  if (!busy()) return;
+  if (!S.files.filter(f=>f.st!=='C').length){ toast('没有可放弃的修改','ok'); return; }
+  openWin('放弃修改 · my-project', '<div id="dcBody"></div>');
+  renderDiscardBody(false);
+}
+function renderDiscardBody(confirmView){
+  const el = $('#dcBody'); if (!el) return;
+  const list = S.files.filter(f=>f.st!=='C');
+  if (!confirmView){
+    el.innerHTML = '<div class="hint-bar red">放弃的修改<b>不可恢复</b>。请勾选要放弃的文件（默认全部未勾选）。</div>'+
+      '<label class="chk-all"><input type="checkbox" id="dcAll">全选</label>'+
+      '<div class="file-list">' + list.map(f=>
+        '<label class="f-li"><input type="checkbox" data-dc="'+esc(f.name)+'">'+
+        '<span class="st '+ST[f.st][1]+'">'+ST[f.st][0]+'</span><span class="nm">'+esc(f.name)+'</span>'+
+        (f.st==='U' ? '<span style="color:var(--bad);font-size:12px">文件将被彻底删除</span>' : '')+'</label>').join('') + '</div>'+
+      '<div class="win-foot"><span class="author">未跟踪文件删除后无法从 Git 恢复</span><button class="btn ghost" data-close>取消</button>'+
+      '<button class="btn danger" id="dcNext" disabled>继续</button></div>';
+    el.querySelector('#dcAll').onchange = e => el.querySelectorAll('[data-dc]').forEach(c=>c.checked=e.target.checked);
+    el.querySelectorAll('[data-dc]').forEach(c => c.onchange = () =>
+      el.querySelector('#dcNext').disabled = ![...el.querySelectorAll('[data-dc]')].some(x=>x.checked));
+    el.querySelector('#dcNext').onclick = () => renderDiscardBody(true);
+  } else {
+    const names = [...el.querySelectorAll('[data-dc]')].filter(c=>c.checked).map(c=>c.dataset.dc);
+    const sel = S.files.filter(f=>names.includes(f.name));
+    const hasU = sel.some(f=>f.st==='U');
+    el.innerHTML = '<div class="hint-bar red">确认放弃 <b>'+sel.length+'</b> 个文件的修改？此操作不可恢复。'+
+      (hasU ? '<br>其中包含未跟踪文件，文件将被<b>彻底删除</b>。' : '')+'</div>'+
+      '<div class="file-list" style="max-height:180px;overflow:auto">'+ sel.map(f=>
+        '<div class="f-li"><span class="st '+ST[f.st][1]+'">'+ST[f.st][0]+'</span><span class="nm">'+esc(f.name)+'</span></div>').join('')+'</div>'+
+      '<div class="win-foot"><span class="author"></span><button class="btn ghost" onclick="renderDiscardBody(false)">返回</button>'+
+      '<button class="btn danger" id="dcGo">确认放弃</button></div>';
+    el.querySelector('#dcGo').onclick = async () => {
+      if (!busy()) return;
+      S.busy = true; await sleep(600); S.busy = false;
+      S.files = S.files.filter(f=>!names.includes(f.name));
+      toast('已放弃 '+sel.length+' 个文件的修改','ok');
+      closeWin(); renderFm();
+    };
+  }
+}
+
+/* ══════════ FM-08 解决冲突 ══════════ */
+let cfView = null;
+function openWinConflict(){
+  if (!S.conflict){ toast('当前没有冲突'); return; }
+  cfView = null;
+  openWin('解决冲突 · my-project', '<div id="cfBody"></div>');
+  renderConflictBody();
+}
+function mergedLines(f){
+  const info = CONF_FILES[f]; const ch = S.conflict.choices[f]||[];
+  let out = [];
+  info.hunks.forEach((hk,i)=>{
+    out.push(...hk.ctxBefore);
+    const d = ch[i];
+    if (d==='local') out.push(...hk.local);
+    else if (d==='remote') out.push(...hk.remote);
+    else if (d==='both') out.push(...hk.local, ...hk.remote);
+    out.push(...hk.ctxAfter);
+  });
+  return out;
+}
+function renderConflictBody(){
+  const el = $('#cfBody'); if (!el) return;
+  const c = S.conflict;
+  c.files.forEach(f=>{ const ch=c.choices[f]; if (ch && ch.every(x=>x)) c.resolved.add(f); else c.resolved.delete(f); });
+  const allDone = c.resolved.size === c.files.length;
+  let html = '<div class="conf-head"><span class="b-pill">合并冲突</span><span>已解决 <b>'+c.resolved.size+'</b> / '+c.files.length+
+    '</span></div><div class="hint-bar">逐个文件解决：为每个冲突块选择保留哪一方的内容，或保留双方。一个文件的所有冲突块都决定后自动标记为已解决。</div>'+
+    '<div class="file-list">' + c.files.map(f=>{
+      const done = c.resolved.has(f);
+      return '<div class="f-li'+(cfView===f?' sel':'')+(done?' resolved':'')+'" data-cf="'+esc(f)+'"><span class="st '+(done?'stA':'stC')+'">'+(done?'已解决':'冲突')+'</span>'+
+        '<span class="nm">'+esc(f)+'</span><span class="acts">'+
+        '<button class="btn sm '+(done?'ghost':'')+'" data-cv="'+esc(f)+'">'+(done?'重新编辑':'解决 ›')+'</button></span></div>';
+    }).join('') + '</div>';
+  if (cfView && CONF_FILES[cfView]){
+    const info = CONF_FILES[cfView];
+    const ch = c.choices[cfView];
+    const col = (side, lines, d) => {
+      const pick = d===side || d==='both';
+      return '<div class="mg-col'+(pick?' pick':'')+'">'+
+        '<div class="cap">'+(side==='local' ? '你的（当前分支 '+esc(S.branch)+'）' : '传入的（origin/'+esc(S.branch)+'）')+'</div>'+
+        '<div class="code">'+(lines.length ? lines.map(l=>esc(l)).join('\n') : '&nbsp;')+'</div></div>';
+    };
+    html += info.hunks.map((hk,i)=>{
+      const d = ch[i];
+      return '<div class="mg-hunk'+(d?' decided':'')+'">'+
+        '<div class="mg-head"><span>冲突块 '+(i+1)+'/'+info.hunks.length+' · '+esc(hk.note)+'</span>'+
+        '<span>'+(d==='local'?'✔ 采用本地':d==='remote'?'✔ 采用远端':d==='both'?'✔ 保留双方':'未决定')+'</span></div>'+
+        '<div class="mg-cols">'+col('local',hk.local,d)+col('remote',hk.remote,d)+'</div>'+
+        '<div class="mg-acts">'+
+        '<button class="btn sm'+(d==='local'?'':' ghost')+'" data-mk="'+esc(cfView)+'|'+i+'|local">采用本地</button>'+
+        '<button class="btn sm'+(d==='remote'?'':' ghost')+'" data-mk="'+esc(cfView)+'|'+i+'|remote">采用远端</button>'+
+        '<button class="btn sm'+(d==='both'?'':' ghost')+'" data-mk="'+esc(cfView)+'|'+i+'|both">保留双方</button>'+
+        '</div></div>';
+    }).join('');
+    html += '<div class="diff-title"><b>合并结果（实时预览）</b><span>'+esc(cfView)+'</span></div>';
+    html += '<div class="diff" style="max-height:170px">'+mergedLines(cfView).map(l=>'<div class="ln ctxl">'+esc(l===''?' ':l)+'</div>').join('')+'</div>';
+  } else {
+    html += '<div class="diff"><div class="diff-empty">点击上方文件开始解决冲突</div></div>';
+  }
+  html += '<div class="win-foot"><span class="author">完成前其他写操作将被锁定</span>'+
+    '<button class="btn ghost" id="cfAbort">中止合并</button>'+
+    '<button class="btn" id="cfDone" '+(allDone?'':'disabled')+' '+(allDone?'style="background:var(--ok)"':'')+'>完成合并提交</button></div>';
+  el.innerHTML = html;
+  el.querySelectorAll('[data-cf]').forEach(n => n.onclick = e => {
+    if (e.target.closest('button')) return;
+    cfView = n.dataset.cf; renderConflictBody();
+  });
+  el.querySelectorAll('[data-cv]').forEach(b => b.onclick = () => { cfView = b.dataset.cv; renderConflictBody(); });
+  el.querySelectorAll('[data-mk]').forEach(b => b.onclick = () => {
+    const parts = b.dataset.mk.split('|');
+    const f = parts.slice(0,-2).join('|'), i = +parts[parts.length-2], k = parts[parts.length-1];
+    S.conflict.choices[f][i] = k;
+    renderConflictBody(); renderStatus();
+  });
+  el.querySelector('#cfDone').onclick = async () => {
+    if (!busy(false)) return;
+    S.busy = true; await sleep(600); S.busy = false;
+    const h = randHash();
+    LOG.forEach(x => x.heads = x.heads.filter(x=>x!=='HEAD'));
+    LOG.unshift({h, m:'Merge branch \''+S.branch+'\' of origin into '+S.branch, a:'yxw', t:'刚刚', files:S.conflict.files.slice(), heads:['HEAD',S.branch,'origin/'+S.branch]});
+    S.files = S.files.filter(f => f.st!=='C');
+    S.conflict = null;
+    toast('合并完成，已生成提交 <b>'+h+'</b>','ok');
+    closeWin(); renderFm();
+  };
+  el.querySelector('#cfAbort').onclick = () => renderConflictAbort();
+}
+function renderConflictAbort(){
+  const el = $('#cfBody'); if (!el) return;
+  el.innerHTML = '<div class="hint-bar red">确认<b>中止合并</b>？将丢弃本次合并的所有结果，恢复到拉取前状态。</div>'+
+    '<div class="win-foot"><span class="author"></span><button class="btn ghost" onclick="openWinConflict()">返回</button>'+
+    '<button class="btn danger" id="abGo">确认中止</button></div>';
+  el.querySelector('#abGo').onclick = () => {
+    S.files = S.files.filter(f => f.st!=='C');
+    ['src/config.py','README.md'].forEach(n => S.files.push({name:n, st:'M'}));
+    S.conflict = null;
+    toast('已中止合并，恢复到拉取前状态','ok');
+    closeWin(); renderFm();
+  };
+}
+
+/* ══════════ FM-09/10 初始化与克隆 ══════════ */
+function openWinInit(){
+  openWin('在此初始化 Git 仓库', '<div id="itBody"></div>');
+  $('#itBody').innerHTML = '<div class="stat-head">将在目录 <span class="b-pill">文档</span> 中创建新的 Git 仓库</div>'+
+    '<div class="hint-bar" style="background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,transparent)">身份信息取自系统 Git 配置：yxw &lt;yxw@example.com&gt;</div>'+
+    '<div class="win-foot"><span class="author"></span><button class="btn ghost" data-close>取消</button><button class="btn" id="itGo">初始化</button></div>';
+  $('#itGo').onclick = async () => {
+    S.busy = true; await sleep(700); S.busy = false;
+    S.scene = 'repo';
+    toast('仓库已创建','ok','目录右键菜单已切换为仓库菜单');
+    closeWin(); renderFm();
+    $('#segScene [data-scene=repo]').click();
+  };
+}
+function openWinClone(){
+  openWin('克隆仓库到此处', '<div id="clBody"></div>');
+  $('#clBody').innerHTML =
+    '<div style="margin-bottom:10px"><b style="font-size:13.5px">仓库 URL</b>'+
+    '<input class="fx-filter" id="clUrl" style="margin-top:6px" value="https://github.com/yxw/awesome-lib.git"></div>'+
+    '<div style="margin-bottom:10px"><b style="font-size:13.5px">目标文件夹</b>'+
+    '<input class="fx-filter" id="clName" style="margin-top:6px" value="awesome-lib"></div>'+
+    '<div class="prog" id="clProg" style="display:none"><i></i></div>'+
+    '<div class="soft-hint" id="clTip">凭证将使用系统配置（credential helper / ssh-agent），MenuGit 不询问、不保存账号密码</div>'+
+    '<div class="win-foot"><span class="author">父目录：文档</span><button class="btn ghost" data-close>取消</button><button class="btn" id="clGo">克隆</button></div>';
+  $('#clUrl').oninput = e => {
+    const seg = e.target.value.trim().replace(/\/+$/,'').split('/').pop().replace(/\.git$/,'');
+    $('#clName').value = seg || '';
+  };
+  $('#clGo').onclick = async () => {
+    const url = $('#clUrl').value.trim();
+    if (!url){ toast('请输入仓库 URL','warn'); return; }
+    const btn = $('#clGo'); btn.disabled = true;
+    const prog = $('#clProg'); prog.style.display = 'block';
+    const bar = prog.querySelector('i');
+    $('#clTip').textContent = '正在克隆 ' + url + ' …';
+    for (let p=10; p<=100; p+=15){ bar.style.width = p+'%'; await sleep(160); }
+    $('#clTip').textContent = '克隆完成';
+    btn.style.display = 'none';
+    $('#clBody').querySelector('.win-foot .author').outerHTML =
+      '<span class="author">克隆完成 · ' + $('#clName').value + '</span><button class="btn ok" id="clOpen">打开文件夹</button>';
+    $('#clOpen').onclick = () => { S.scene='repo'; closeWin(); renderFm(); $('#segScene [data-scene=repo]').click(); toast('已打开 awesome-lib（演示：切换到仓库场景）','ok'); };
+  };
+}
+
+/* ══════════ FM-11 设置 ══════════ */
+function openWinSettings(){
+  openWin('设置 · MenuGit', '<div id="stBody"></div>');
+  $('#stBody').innerHTML =
+    '<div class="set-row"><div class="l"><b>语言</b><span>界面显示语言（默认跟随系统）</span></div>'+
+      '<select id="stLang"><option value="system">跟随系统</option><option value="zh">中文</option><option value="en">English</option></select></div>'+
+    '<div class="set-row"><div class="l"><b>新增文件默认勾选提交</b><span>关闭时，提交窗口中新增/未跟踪文件默认不勾选</span></div>'+
+      '<div class="sw '+(S.settings.checkNew?'on':'')+'" id="stNew"></div></div>'+
+    '<div class="set-row"><div class="l"><b>诊断日志</b><span>查看运行日志与 Git 检测结果（排障用）</span></div>'+
+      '<button class="btn sm ghost" id="stDiag">打开日志目录</button></div>'+
+    '<div class="set-row"><div class="l"><b>关于</b><span>MenuGit v0.3 · 跨平台轻量 Git 右键工具</span></div>'+
+      '<button class="btn sm ghost" id="stUpd">检查更新</button></div>'+
+    '<div style="padding:14px 4px 4px;font-size:12.5px;color:var(--ink3)">用户名/邮箱、代理、凭证、默认编辑器、diff 工具等均来自系统 Git 配置，<span class="link" onclick="toast(\'请在终端执行 git config --global --edit 修改（演示）\')">如何在系统 Git 配置中修改 →</span></div>';
+  $('#stLang').value = S.settings.lang;
+  $('#stLang').onchange = e => { S.settings.lang = e.target.value; toast('设置已保存','ok'); };
+  $('#stNew').onclick = e => { S.settings.checkNew = !S.settings.checkNew; e.target.classList.toggle('on', S.settings.checkNew); toast('设置已保存','ok'); };
+  $('#stDiag').onclick = () => toast('日志目录已打开（演示）','ok','~/.menugit/logs');
+  $('#stUpd').onclick = () => toast('已是最新版本 v0.3','ok');
+}
+
+/* ══════════ 顶栏控制 ══════════ */
+$('#segOs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#segOs').children].forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  S.os = b.dataset.os; closeCtx(); renderFm();
+});
+$('#segScene').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#segScene').children].forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  S.scene = b.dataset.scene; closeCtx(); closeWin(); renderFm();
+  $('#hint').innerHTML = S.scene==='repo'
+    ? '👉 在下方文件管理器中<b>右键点击</b>任意文件夹 / 文件 / 空白处，打开 <b>MenuGit</b> 子菜单'
+    : '👉 当前是<b>非仓库目录</b>：右键只有「初始化 / 克隆 / 设置」三项，试试点「在此初始化 Git 仓库」';
+});
+$('#tglConflict').onclick = e => { S.conflictSim = !S.conflictSim; e.target.classList.toggle('on', S.conflictSim);
+  toast(S.conflictSim ? '已开启：下一次「拉取」将产生合并冲突' : '已关闭'); };
+$('#tglNoGit').onclick = e => { S.noGit = !S.noGit; e.target.classList.toggle('on', S.noGit);
+  toast(S.noGit ? '已开启：菜单点击将提示未检测到 Git' : '已关闭'); };
+$('#btnReset').onclick = () => location.reload();
+
+/* ══════════ 启动 ══════════ */
+renderFm();
+setTimeout(()=>toast('欢迎使用 MenuGit 交互原型','ok','提示：顶部可切换 Windows / macOS / Ubuntu 三种系统外观'), 400);
+</script>
+</body>
+</html>
