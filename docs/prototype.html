@@ -537,15 +537,16 @@ function closeWin(){
   $('#overlay').classList.remove('show');
   if (retCommit){ retCommit = false; openWinCommit(false); }
 }
-$('#overlay').addEventListener('click', e => { if (e.target.id==='overlay' || e.target.closest('[data-close]')) closeWin(); });
-document.addEventListener('keydown', e => { if (e.key==='Escape'){ closeWin(); closeCtx(); } });
+$('#overlay').addEventListener('click', e => { if (S.busy) return; if (e.target.id==='overlay' || e.target.closest('[data-close]')) closeWin(); });
+document.addEventListener('keydown', e => { if (e.key==='Escape' && !S.busy){ closeWin(); closeCtx(); } });
 
 /* ══════════ 差异视图 ══════════ */
 function diffHTML(lines){
   return '<div class="diff">' + lines.map(l=>'<div class="ln '+l[0]+'">'+esc(l[1])+'</div>').join('') + '</div>';
 }
 function diffOf(name){
-  if (CONFLICT_DIFFS[name]) return CONFLICT_DIFFS[name];
+  if (S.conflict && S.conflict.files.includes(name))
+    return [['hunk','⚠ 该文件存在未解决的合并冲突'],['ctxl',''],['ctxl','请通过右键 →「解决冲突」处理，此处暂不展示内容。']];
   if (DIFFS[name]) return DIFFS[name];
   return [ ['hunk','@@ -1,2 +1,4 @@'], ['ctxl','/* '+name+' */'], ['add','+ 新增内容（演示）'] ];
 }
@@ -664,7 +665,7 @@ async function doCommit(){
   const btn = $('#cBtn'); btn.disabled = true; btn.textContent = '提交中…';
   S.busy = true; await sleep(800); S.busy = false;
   const h = randHash();
-  LOG.forEach(c => c.heads = c.heads.filter(x=>x!=='HEAD'));
+  LOG.forEach(c => c.heads = c.heads.filter(x=>x!=='HEAD' && x!==S.branch));
   LOG.unshift({h, m:msg.split('\n')[0], a:'yxw', t:'刚刚', files:names, heads:['HEAD',S.branch]});
   S.files = S.files.filter(f => !names.includes(f.name));
   S.ahead++;
@@ -711,6 +712,7 @@ async function pullFrom(src){
   S.busy = false;
   if (S.conflictSim){
     S.conflictSim = false; $('#tglConflict').classList.remove('on');
+    S.behind = 0;
     const cf = ['src/config.py','README.md'];
     S.conflict = { files: cf, resolved:new Set(), choices:{} };
     cf.forEach(n => S.conflict.choices[n] = CONF_FILES[n].hunks.map(()=>null));
@@ -720,6 +722,8 @@ async function pullFrom(src){
   }
   if (!S.pulled){
     S.pulled = true; S.behind = 0;
+    LOG.forEach(c => c.heads = c.heads.filter(x => x !== 'origin/'+S.branch));
+    LOG.unshift({h:randHash(), m:'docs: 同步团队安装文档（来自远端）', a:'Alice', t:'刚刚', files:['docs/install.md'], heads:['origin/'+S.branch]});
     toast('拉取完成：从 origin/'+esc(src)+' 拉入 1 个提交，更新 2 个文件','ok', src!==S.branch ? '来源与当前分支不同名：'+esc(src)+' → '+esc(S.branch) : '');
   }
   else toast('已是最新','ok');
@@ -768,10 +772,14 @@ function renderPushBody(){
 }
 async function pushTo(target){
   if (!busy()) return;
-  const pb0 = $('#cPushBtn'); if (pb0) pb0.disabled = true;
+  const pb0 = $('#cPushBtn'); if (pb0){ pb0.disabled = true; pb0.textContent = '推送中…'; }
   S.busy = true; renderStatus(); toast('正在推送到 origin/'+esc(target)+'…');
   await sleep(800);
   S.busy = false; S.ahead = 0;
+  const all = LOG.concat(LOG_OTHER);
+  all.forEach(c => c.heads = c.heads.filter(x => x !== 'origin/'+target));
+  const hc = all.find(c => c.heads.includes('HEAD'));
+  if (hc) hc.heads.push('origin/'+target);
   toast('已推送到 <b>origin/'+esc(target)+'</b>','ok', target!==S.branch ? '远端与本地分支不同名：'+esc(S.branch)+' → '+esc(target) : '');
   renderStatus();
   if ($('#commitBody')) renderCommitBody();
@@ -803,9 +811,20 @@ function renderBranchBody(){
     BR_LOCAL.push(v); switchBranch(v, false, true);
   };
 }
+function relabelBranch(newBr, isNew){
+  const all = LOG.concat(LOG_OTHER);
+  const headC = all.find(c => c.heads.includes('HEAD'));
+  if (!headC) return;
+  all.forEach(c => c.heads = c.heads.filter(x => x!=='HEAD'));
+  if (isNew){ headC.heads.unshift('HEAD', newBr); return; }
+  const tgt = all.find(c => c.heads.includes(newBr) || c.heads.includes('origin/'+newBr));
+  if (tgt && !tgt.heads.includes('HEAD')) tgt.heads.unshift('HEAD');
+  else if (!tgt) headC.heads.unshift('HEAD', newBr);
+}
 async function switchBranch(name, isRemote, isNew){
   if (!busy()) return;
   if (isRemote) name = name.replace('origin/','');
+  relabelBranch(name, isNew);
   S.busy = true; await sleep(500); S.busy = false;
   S.branch = name;
   toast(isNew ? '已创建并切换到 <b>'+esc(name)+'</b>' : (isRemote ? '已检出并跟踪 <b>'+esc(name)+'</b>' : '已切换到 <b>'+esc(name)+'</b>'), 'ok');
@@ -971,11 +990,12 @@ function renderConflictBody(){
     if (!busy(false)) return;
     S.busy = true; await sleep(600); S.busy = false;
     const h = randHash();
-    LOG.forEach(x => x.heads = x.heads.filter(x=>x!=='HEAD'));
-    LOG.unshift({h, m:'Merge branch \''+S.branch+'\' of origin into '+S.branch, a:'yxw', t:'刚刚', files:S.conflict.files.slice(), heads:['HEAD',S.branch,'origin/'+S.branch]});
+    LOG.forEach(x => x.heads = x.heads.filter(x=>x!=='HEAD' && x!==S.branch));
+    LOG.unshift({h, m:'Merge branch \''+S.branch+'\' of origin into '+S.branch, a:'yxw', t:'刚刚', files:S.conflict.files.slice(), heads:['HEAD',S.branch]});
+    S.ahead++;
     S.files = S.files.filter(f => f.st!=='C');
     S.conflict = null;
-    toast('合并完成，已生成提交 <b>'+h+'</b>','ok');
+    toast('合并完成，已生成提交 <b>'+h+'</b>（待推送）','ok');
     closeWin(); renderFm();
   };
   el.querySelector('#cfAbort').onclick = () => renderConflictAbort();
@@ -1025,11 +1045,12 @@ function openWinClone(){
   $('#clGo').onclick = async () => {
     const url = $('#clUrl').value.trim();
     if (!url){ toast('请输入仓库 URL','warn'); return; }
-    const btn = $('#clGo'); btn.disabled = true;
+    const btn = $('#clGo'); btn.disabled = true; S.busy = true;
     const prog = $('#clProg'); prog.style.display = 'block';
     const bar = prog.querySelector('i');
     $('#clTip').textContent = '正在克隆 ' + url + ' …';
     for (let p=10; p<=100; p+=15){ bar.style.width = p+'%'; await sleep(160); }
+    S.busy = false;
     $('#clTip').textContent = '克隆完成';
     btn.style.display = 'none';
     $('#clBody').querySelector('.win-foot .author').outerHTML =

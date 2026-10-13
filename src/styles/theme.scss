@@ -1,0 +1,115 @@
+/* ============================================================
+   MenuGit 设计令牌
+   提取自 docs/prototype.html（以 Windows 亮色主题为基准）。
+   原型仅有亮色主题，暗色变量按语义对应补全。
+   data-theme 属性由 CommitView 挂载时跟随系统
+   prefers-color-scheme 写入 <html>。
+   ============================================================ */
+
+:root {
+  /* 强调色 */
+  --accent: #0067c0;
+  --accent-soft: #e8f1fb;
+
+  /* 文字（主 / 次 / 弱） */
+  --ink: #1b1f27;
+  --ink2: #5b6270;
+  --ink3: #8b93a3;
+
+  /* 背景与表面 */
+  --bg: #eef0f4;
+  --card: #ffffff;
+  --bg-soft: #fafbfc;  /* 输入框、标题栏等浅表面 */
+  --bg-code: #fbfbfd;  /* diff 代码区背景 */
+  --bg-hover: #f6f8fb; /* 列表行悬停 */
+
+  /* 边框 */
+  --line: #e3e6ec;
+
+  /* 语义色（成功 / 警告 / 危险 / 信息蓝 / 紫色标签） */
+  --ok: #1a7f4b;
+  --ok-soft: #e6f4ec;
+  --warn: #b7791f;
+  --warn-soft: #fdf3e0;
+  --bad: #c0392b;
+  --bad-soft: #fdecea;
+  --info: #2563ae;
+  --info-soft: #e8f0fe;
+  --purple: #6b4fa3;
+  --purple-soft: #eeeaf8;
+
+  /* diff 增删行颜色 */
+  --diff-add-bg: #e6f4ec;
+  --diff-add-ink: #145c34;
+  --diff-del-bg: #fdecea;
+  --diff-del-ink: #a03227;
+  --diff-hunk-bg: #eef3fd;
+  --diff-hunk-ink: #2563ae;
+
+  /* 其他 */
+  --scroll-thumb: #c9cdd6;
+  --mono: ui-monospace, "SF Mono", Consolas, Menlo, monospace;
+  --radius: 8px;
+}
+
+/* 暗色主题覆盖 */
+:root[data-theme="dark"] {
+  --accent: #3d8fd1;
+  --accent-soft: #1c2f40;
+
+  --ink: #e8eaf0;
+  --ink2: #aab1c0;
+  --ink3: #7d8494;
+
+  --bg: #14171c;
+  --card: #1e232b;
+  --bg-soft: #232833;
+  --bg-code: #191d24;
+  --bg-hover: #262c38;
+
+  --line: #343a46;
+
+  --ok: #4cba7d;
+  --ok-soft: #1d3328;
+  --warn: #d9a44a;
+  --warn-soft: #382c17;
+  --bad: #e07062;
+  --bad-soft: #3d2320;
+  --info: #6aa5e0;
+  --info-soft: #1d2a3d;
+  --purple: #a88bd8;
+  --purple-soft: #2b2440;
+
+  --diff-add-bg: #1d3328;
+  --diff-add-ink: #7fd0a2;
+  --diff-del-bg: #3d2320;
+  --diff-del-ink: #e89a90;
+  --diff-hunk-bg: #1d2a3d;
+  --diff-hunk-ink: #6aa5e0;
+
+  --scroll-thumb: #3d4450;
+}
+
+/* 基础样式（沿用原型） */
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font: 14px/1.6 "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+/* 滚动条（沿用原型） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 4px;
+}
