@@ -3,6 +3,15 @@ import { onMounted, watch } from "vue";
 import { useSessionStore } from "./stores/session";
 import { useCommitStore } from "./stores/commit";
 import CommitView from "./views/CommitView.vue";
+import PushView from "./views/PushView.vue";
+import PullView from "./views/PullView.vue";
+import BranchView from "./views/BranchView.vue";
+import LogView from "./views/LogView.vue";
+import DiscardView from "./views/DiscardView.vue";
+import ConflictView from "./views/ConflictView.vue";
+import InitView from "./views/InitView.vue";
+import CloneView from "./views/CloneView.vue";
+import SettingsView from "./views/SettingsView.vue";
 
 const session = useSessionStore();
 const commit = useCommitStore();
@@ -25,18 +34,13 @@ watch(() => session.request, syncCommit);
 
 <template>
   <CommitView v-if="session.view === 'commit'" />
-  <div v-else class="view-placeholder">
-    <el-empty
-      :description="`${session.view} 视图将按里程碑（M2+）逐步实现`"
-    />
-  </div>
+  <PushView v-else-if="session.view === 'push'" />
+  <PullView v-else-if="session.view === 'pull'" />
+  <BranchView v-else-if="session.view === 'branch'" />
+  <LogView v-else-if="session.view === 'log'" />
+  <DiscardView v-else-if="session.view === 'discard'" />
+  <ConflictView v-else-if="session.view === 'conflict'" />
+  <InitView v-else-if="session.view === 'init'" />
+  <CloneView v-else-if="session.view === 'clone'" />
+  <SettingsView v-else-if="session.view === 'settings'" />
 </template>
-
-<style scoped lang="scss">
-.view-placeholder {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-</style>

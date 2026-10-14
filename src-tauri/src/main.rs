@@ -59,6 +59,8 @@ fn main() {
             ops::branch::switch_branch,
             ops::branch::checkout_remote,
             ops::logop::get_log,
+            ops::logop::get_commit_files,
+            ops::logop::get_commit_diff,
             ops::discard::discard_changes,
             ops::conflict::get_conflict_file,
             ops::conflict::resolve_conflict_file,
@@ -67,6 +69,7 @@ fn main() {
             ops::initclone::init_repo,
             ops::initclone::clone_repo,
             ops::initclone::cancel_clone,
+            ops::initclone::open_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -138,9 +138,20 @@ export interface LogEntry {
   hash: string;
   shortHash: string;
   subject: string;
+  /** 完整提交信息正文（多行） */
+  body: string;
   author: string;
   time: number;
   refs: string[];
+}
+
+/** 某次提交的变更文件条目（get_commit_files） */
+export interface CommitFileEntry {
+  path: string;
+  /** 变更状态字母：A 新增 / M 修改 / D 删除 / R 重命名 等 */
+  change: string;
+  /** 重命名/复制时的原路径 */
+  origPath: string | null;
 }
 
 /** 冲突块三选一 */
@@ -297,6 +308,17 @@ export const getSettings = () => call<AppSettings>("get_settings");
 /** 保存应用设置（同步诊断日志开关） */
 export const setSettings = (settings: AppSettings) =>
   call<void>("set_settings", { settings });
+
+/** 某次提交的变更文件列表（对比其父提交） */
+export const getCommitFiles = (path: string, hash: string) =>
+  call<CommitFileEntry[]>("get_commit_files", { path, hash });
+
+/** 查看某次提交中单个文件的差异（对比其父提交） */
+export const getCommitDiff = (path: string, hash: string, file: string) =>
+  call<DiffResult>("get_commit_diff", { path, hash, file });
+
+/** 用系统文件管理器打开目录（克隆完成后直达新目录） */
+export const openDir = (path: string) => call<void>("open_dir", { path });
 
 /** 订阅克隆进度事件；返回取消监听函数 */
 export function listenCloneProgress(

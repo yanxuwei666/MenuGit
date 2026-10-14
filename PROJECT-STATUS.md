@@ -2,7 +2,7 @@
 
 > 本文件是 AI 协作交接文档：记录项目概况、已确认决策、当前进度与下一步计划，供后续 AI 会话（或新协作者）快速接续工作。**每次完成一个阶段性节点，应更新本文件。**
 >
-> 最后更新：2026-10-14 ｜ 当前阶段：M2 完成（编码 + 前端接线 + 编译验证），下一步 M3（Windows COM DLL）
+> 最后更新：2026-10-14 ｜ 当前阶段：M2+ 全部 P0 视图完成 + M3 COM DLL 最小验证通过（待实机注册测试）
 
 ---
 
@@ -60,7 +60,8 @@ npm run tauri dev
 | --- | --- | --- |
 | M1 GUI 骨架 + 提交窗口迁移 | ✅ 完成 | 前端 `npm run build` 通过 |
 | M2 Rust git 执行层 | ✅ 完成 | cargo check / cargo build / npm run build 全部通过；api.ts 已与 Rust 签名核对一致 |
-| M3 Windows COM DLL | ⬜ 未开始 | 第一步先做"最小 DLL 出现在右键菜单"技术验证 |
+| M2+ 全部 P0 视图 | ✅ 完成 | 推送/拉取/分支/日志/放弃修改/冲突编辑器/初始化/克隆/设置 9 视图 + App.vue 全挂载；新增 get_commit_files/get_commit_diff/open_dir 命令；双端构建通过 |
+| M3 Windows COM DLL | 🔶 编译验证通过 | src-tauri-shell crate：IContextMenu+IShellExtInit 双接口 COM cdylib，DLL 产出且导出齐全（CLSID {D4A7C1E9-3F2B-4E86-9C51-A0B2C3D4E5F6}）；**实机注册测试未做**（regsvr32 写 HKCU，需用户确认后执行，步骤见 src-tauri-shell/README.md） |
 | M4 Ubuntu 闭环 / M5 macOS 闭环 / M6 收尾 | ⬜ 未开始 | — |
 
 ## 5. 当前代码状态明细
@@ -90,14 +91,14 @@ MenuGit/
 
 ### 5.2 已注册的 Tauri 命令（main.rs）
 
-`get_cli_args`、`settings::get_settings/set_settings`、`ops::status::get_repo_info/get_status`、`ops::diff::get_diff`、`ops::stage::stage_files/commit`、`ops::sync::push/pull`、`ops::branch::list_branches/switch_branch/checkout_remote`、`ops::logop::get_log`、`ops::discard::discard_changes`、`ops::conflict::get_conflict_file/resolve_conflict_file/complete_merge/abort_merge`、`ops::initclone::init_repo/clone_repo/cancel_clone`（clone 进度走 `clone-progress` 事件）。
+`get_cli_args`、`settings::get_settings/set_settings`、`ops::status::get_repo_info/get_status/get_identity`、`ops::diff::get_diff`、`ops::stage::stage_files/commit`、`ops::sync::push/pull`、`ops::branch::list_branches/switch_branch/checkout_remote`、`ops::logop::get_log/get_commit_files/get_commit_diff`、`ops::discard::discard_changes`、`ops::conflict::get_conflict_file/resolve_conflict_file/complete_merge/abort_merge`、`ops::initclone::init_repo/clone_repo/cancel_clone/open_dir`（clone 进度走 `clone-progress` 事件；commit/pull/push 均过 R3 写锁）。
 
 ### 5.3 当前剩余事项（接手 AI 优先处理）
 
-1. **提交闭环只差推送面板**：提交成功后已自动切换到 push 视图（App.vue 中为占位空状态）。下一步实现推送面板（FM-04：目标分支选择、新建远端分支提示、结果反馈），拉取面板（FM-03）同构实现。
-2. **桌面窗口冒烟未做**：`npm run tauri dev` 会开窗口、需要人工确认，故未自动运行。已验证到 `cargo build` 产出 `src-tauri/target/debug/menugit.exe`（13MB）。冒烟建议：`npm run tauri dev` 后手动执行 `target\debug\menugit.exe commit --path <任意仓库>` 或在 devUrl 中查看。
-3. **前端其余视图**（branch/log/discard/conflict/init/clone/settings）仍为占位，按 M2+ 计划用真实 api.ts 逐步接线；api.ts 已提供全部命令封装。
-4. `src/api.ts` 与 Rust 签名一致性已逐命令核对（2026-10-14），后续新增命令需同步维护。
+1. **M3 实机注册测试**（最高优先，需用户确认）：`regsvr32 /s src-tauri-shell\target\debug\menugit_shell.dll`（64 位 regsvr32，仅写 HKCU 免管理员），先 `reg add HKCU\Software\MenuGit /v ExePath /d <menugit.exe 绝对路径>`，然后在任意目录右键验证"MenuGit"出现且能拉起主程序；验证后 `regsvr32 /u` 卸载。
+2. **人工冒烟**：`npm run tauri dev` 后用 CLI 验证各视图：`menugit.exe push|pull|branch|log|discard|conflict|init|clone|settings --path <仓库或目录>`；重点走一遍"提交 → 推送面板 → 取消回提交窗口"闭环与"拉取冲突 → 冲突编辑器"流程。
+3. **视图代码由 5 个并行子代理产出**，各自报告自检通过且双端构建通过，但视图间 UI 细节一致性（布局风格/交互用语）未经人工审查，冒烟时留意。
+4. stores/branch.ts、stores/log.ts、stores/repoops.ts 内有少量"TODO: 汇总时迁移到 api.ts"的本地 invoke 封装（get_commit_files/get_commit_diff/open_dir），api.ts 已有同名封装，后续统一迁移。
 
 ### 5.4 M2 实现细节备忘
 
@@ -108,11 +109,11 @@ MenuGit/
 
 ## 6. 下一步执行顺序
 
-1、实现推送面板（FM-04）与拉取面板（FM-03）：同构对话框（本地分支 + 远端/分支选择、新建远端分支确认、进行中状态、结果摘要/失败可读原因），完成后把 realCommit 的闭环从"切占位视图"改为真实推送流程。
-2、分支窗口（FM-05）、日志窗口（FM-06）接线：api.ts 的 listBranches/switchBranch/getLog 已就绪。
-3、放弃修改（FM-07，含 R4 二次确认）与冲突解决（FM-08 三选一合并编辑器，get_conflict_file/resolve_conflict_file 已就绪）。
-4、init/clone/settings 接线，完成全部 P0 视图。
-5、进入 M3：Windows COM DLL 最小验证（Rust cdylib + windows-rs 实现 IContextMenu/IShellExtInit，注册到 HKCU\Software\Classes，先让"MenuGit (main)"出现在右键菜单并能拉起主程序，再做完整 7+1 菜单）。
+1、完成 M3 COM DLL 最小验证：src-tauri-shell 编译通过后，向用户确认后执行注册（regsvr32，仅写 HKCU），验证右键菜单出现"MenuGit"并能拉起主程序；随后补动态分支名（扩展内解析 .git/HEAD）与完整 7+1 菜单项。
+2、按冒烟结果修复各视图问题（重点：推送被拒引导、拉取冲突跳转、冲突编辑器三选一、提交闭环取消行为）。
+3、M6 收尾项：窗口标题/退出行为、诊断日志验证、打包脚本（NSIS）准备。
+4、M4 Ubuntu 闭环（python3-nautilus 扩展 + deb 打包）与 M5 macOS 闭环（FinderSync + DMG）。
+5、stores 内 TODO 的本地 invoke 封装统一迁移到 api.ts；考虑 vite manualChunks 优化 1MB 主包（P2 优先级）。
 
 ## 7. 工作约定（给后续 AI 的红线）
 

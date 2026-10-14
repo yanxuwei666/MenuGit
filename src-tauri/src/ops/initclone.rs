@@ -142,6 +142,17 @@ pub fn cancel_clone(repo_key: String) -> Result<(), GitError> {
     Ok(())
 }
 
+/// 用系统文件管理器打开目录（FM-10：克隆完成后"打开文件夹"）
+#[tauri::command]
+pub fn open_dir(path: String) -> Result<(), GitError> {
+    // 不做目录存在性校验，交给 explorer 自行处理；spawn 失败时归一化为 Other 错误
+    std::process::Command::new("explorer")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| GitError::other(format!("打开文件夹失败：{e}")))
+}
+
 /// 从 clone 地址推断目录名：取最后一段并去掉 `.git` 后缀
 fn repo_name_from_url(url: &str) -> String {
     let trimmed = url.trim_end_matches('/');
