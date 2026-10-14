@@ -2,7 +2,7 @@
 
 > 本文件是 AI 协作交接文档：记录项目概况、已确认决策、当前进度与下一步计划，供后续 AI 会话（或新协作者）快速接续工作。**每次完成一个阶段性节点，应更新本文件。**
 >
-> 最后更新：2026-10-14 ｜ 当前阶段：M2+ 全部 P0 视图完成 + M3 COM DLL 最小验证通过（待实机注册测试）
+> 最后更新：2026-10-14 ｜ 当前阶段：M2+ 全部 P0 视图完成 + M3 COM DLL 注册验证通过（挂载点已注册，待人工确认 Explorer 菜单显示）
 
 ---
 
@@ -61,7 +61,7 @@ npm run tauri dev
 | M1 GUI 骨架 + 提交窗口迁移 | ✅ 完成 | 前端 `npm run build` 通过 |
 | M2 Rust git 执行层 | ✅ 完成 | cargo check / cargo build / npm run build 全部通过；api.ts 已与 Rust 签名核对一致 |
 | M2+ 全部 P0 视图 | ✅ 完成 | 推送/拉取/分支/日志/放弃修改/冲突编辑器/初始化/克隆/设置 9 视图 + App.vue 全挂载；新增 get_commit_files/get_commit_diff/open_dir 命令；双端构建通过 |
-| M3 Windows COM DLL | 🔶 编译验证通过 | src-tauri-shell crate：IContextMenu+IShellExtInit 双接口 COM cdylib，DLL 产出且导出齐全（CLSID {D4A7C1E9-3F2B-4E86-9C51-A0B2C3D4E5F6}）；**实机注册测试未做**（regsvr32 写 HKCU，需用户确认后执行，步骤见 src-tauri-shell/README.md） |
+| M3 Windows COM DLL | 🔶 注册验证通过 | src-tauri-shell：IContextMenu+IShellExtInit COM cdylib，已修复挂载点嵌套路径 bug 并实机注册（HKCU 三键 + ExePath 均验证正确，menugit.exe 带参启动成功）；**待人工确认**：Explorer 右键目录是否显示"MenuGit"（Win11 在"显示更多选项"内）；后续补动态分支名与完整 7+1 菜单 |
 | M4 Ubuntu 闭环 / M5 macOS 闭环 / M6 收尾 | ⬜ 未开始 | — |
 
 ## 5. 当前代码状态明细
@@ -95,7 +95,7 @@ MenuGit/
 
 ### 5.3 当前剩余事项（接手 AI 优先处理）
 
-1. **M3 实机注册测试**（最高优先，需用户确认）：`regsvr32 /s src-tauri-shell\target\debug\menugit_shell.dll`（64 位 regsvr32，仅写 HKCU 免管理员），先 `reg add HKCU\Software\MenuGit /v ExePath /d <menugit.exe 绝对路径>`，然后在任意目录右键验证"MenuGit"出现且能拉起主程序；验证后 `regsvr32 /u` 卸载。
+1. **M3 人工确认 + 补全**：当前 DLL 已注册（卸载：`regsvr32 /u "src-tauri-shell\target\debug\menugit_shell.dll"`）。请用户在任意文件夹上右键（Win11：显示更多选项）确认"MenuGit"出现，点击后应拉起 menugit.exe 打开提交窗口。确认后补：动态分支名（扩展内读 .git/HEAD）、完整 7+1 菜单项、文件/驱动器挂载点。
 2. **人工冒烟**：`npm run tauri dev` 后用 CLI 验证各视图：`menugit.exe push|pull|branch|log|discard|conflict|init|clone|settings --path <仓库或目录>`；重点走一遍"提交 → 推送面板 → 取消回提交窗口"闭环与"拉取冲突 → 冲突编辑器"流程。
 3. **视图代码由 5 个并行子代理产出**，各自报告自检通过且双端构建通过，但视图间 UI 细节一致性（布局风格/交互用语）未经人工审查，冒烟时留意。
 4. stores/branch.ts、stores/log.ts、stores/repoops.ts 内有少量"TODO: 汇总时迁移到 api.ts"的本地 invoke 封装（get_commit_files/get_commit_diff/open_dir），api.ts 已有同名封装，后续统一迁移。
