@@ -6,7 +6,7 @@
  * 浏览器（无 Tauri 环境）保持静态示例数据，仅供布局调试。
  */
 import { defineStore } from "pinia";
-import { ElMessage } from "element-plus";
+import { notifySuccess, notifyError, notifyWarning } from "../ui/feedback";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   getRepoInfo,
@@ -165,7 +165,7 @@ export const useSyncStore = defineStore("sync", {
       }
       const target = this.pushTarget.trim();
       if (!validBranchName(target)) {
-        ElMessage.warning("分支名不能含空格、中文或特殊字符");
+        notifyWarning("分支名不能含空格、中文或特殊字符");
         return;
       }
       this.pushing = true;
@@ -176,7 +176,7 @@ export const useSyncStore = defineStore("sync", {
         await this.load(path);
         this.pushDone = true;
         this.pushStatus = "";
-        ElMessage.success(`已推送到 origin/${target}`);
+        notifySuccess(`已推送到 origin/${target}`);
       } catch (e) {
         const err = toGitError(e);
         if (/rejected/i.test(`${err.message}\n${err.stderr}`)) {
@@ -184,11 +184,7 @@ export const useSyncStore = defineStore("sync", {
           this.pushRejected = true;
           this.pushStatus = "";
         } else {
-          ElMessage.error({
-            message: err.message || "推送失败",
-            showClose: true,
-            duration: 5000
-          });
+          notifyError(err.message || "推送失败");
         }
       } finally {
         this.pushing = false;
@@ -210,17 +206,13 @@ export const useSyncStore = defineStore("sync", {
         }
         this.pushRejected = false;
         this.pullStatus = "";
-        ElMessage.success(pullSummaryTextOf(r));
+        notifySuccess(pullSummaryTextOf(r));
       } catch (e) {
         const err = toGitError(e);
         if (/CONFLICT/i.test(`${err.message}\n${err.stderr}`)) {
           this.enterConflict();
         } else {
-          ElMessage.error({
-            message: err.message || "拉取失败",
-            showClose: true,
-            duration: 5000
-          });
+          notifyError(err.message || "拉取失败");
         }
       } finally {
         this.pulling = false;
@@ -237,7 +229,7 @@ export const useSyncStore = defineStore("sync", {
       }
       const source = this.pullSource.trim();
       if (!validBranchName(source)) {
-        ElMessage.warning("分支名不能含空格、中文或特殊字符");
+        notifyWarning("分支名不能含空格、中文或特殊字符");
         return;
       }
       this.pulling = true;
@@ -255,17 +247,13 @@ export const useSyncStore = defineStore("sync", {
         this.pullDone = true;
         this.pullStatus = "";
         this.pullSummary = { commits: r.commits, filesChanged: r.filesChanged };
-        ElMessage.success(pullSummaryTextOf(r));
+        notifySuccess(pullSummaryTextOf(r));
       } catch (e) {
         const err = toGitError(e);
         if (/CONFLICT/i.test(`${err.message}\n${err.stderr}`)) {
           this.enterConflict();
         } else {
-          ElMessage.error({
-            message: err.message || "拉取失败",
-            showClose: true,
-            duration: 5000
-          });
+          notifyError(err.message || "拉取失败");
         }
       } finally {
         this.pulling = false;
@@ -275,11 +263,7 @@ export const useSyncStore = defineStore("sync", {
     /** 冲突闭环：提示并切换到冲突处理视图 */
     enterConflict() {
       this.pullStatus = "";
-      ElMessage.warning({
-        message: "拉取产生冲突，进入冲突处理",
-        showClose: true,
-        duration: 5000
-      });
+      notifyWarning("拉取产生冲突，进入冲突处理");
       const session = useSessionStore();
       session.request = { ...session.request, view: "conflict" };
     },
@@ -302,11 +286,7 @@ export const useSyncStore = defineStore("sync", {
         }
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "检查工作区状态失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "检查工作区状态失败");
       }
     },
 
@@ -320,7 +300,7 @@ export const useSyncStore = defineStore("sync", {
       this.repo.ahead = 0;
       this.repo.upstream = `origin/${this.pushTarget}`;
       this.pushDone = true;
-      ElMessage.success(`已推送到 origin/${this.pushTarget}`);
+      notifySuccess(`已推送到 origin/${this.pushTarget}`);
     },
 
     /** 浏览器 mock 拉取（静态示例演示） */
@@ -333,7 +313,7 @@ export const useSyncStore = defineStore("sync", {
       this.pullDone = true;
       this.repo.behind = 0;
       this.pullSummary = { commits: 1, filesChanged: 2 };
-      ElMessage.success(this.pullSummaryText);
+      notifySuccess(this.pullSummaryText);
     }
   }
 });

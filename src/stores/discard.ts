@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { h } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessageBox } from "element-plus";
+import { notifySuccess, notifyError } from "../ui/feedback";
 import { discardChanges, getStatus, toGitError, type StatusFile } from "../api";
 import { useSessionStore } from "./session";
 
@@ -119,14 +120,10 @@ export const useDiscardStore = defineStore("discard", {
           await new Promise((r) => setTimeout(r, 600));
           this.files = this.files.filter((f) => !f.checked);
         }
-        ElMessage.success(`已放弃 ${n} 个文件的修改`);
+        notifySuccess(`已放弃 ${n} 个文件的修改`);
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "放弃修改失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "放弃修改失败");
       } finally {
         this.discarding = false;
       }

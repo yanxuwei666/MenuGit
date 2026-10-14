@@ -8,7 +8,7 @@
 
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
-import { ElMessage } from "element-plus";
+import { notifyError } from "../ui/feedback";
 import { getLog, toGitError } from "../api";
 import { parseDiff, type DiffLine } from "./commit";
 import { useSessionStore } from "./session";
@@ -382,15 +382,11 @@ export const useLogStore = defineStore("log", {
       }
     },
 
-    /** 统一错误处理：归一化 + ElMessage + 保留原始 stderr 供 el-collapse 展开 */
+    /** 统一错误处理：归一化 + notifyError + 保留原始 stderr 供 el-collapse 展开 */
     handleError(e: unknown, fallback: string) {
       const err = toGitError(e);
       this.lastError = { message: err.message || fallback, stderr: err.stderr };
-      ElMessage.error({
-        message: err.message || fallback,
-        showClose: true,
-        duration: 5000
-      });
+      notifyError(err.message || fallback);
     },
 
     /** 返回提交视图（提交窗口状态保留在 store 中） */

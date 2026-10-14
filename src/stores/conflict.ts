@@ -10,7 +10,8 @@
  * 浏览器环境（无 Tauri）使用底部 mock 数据演示编辑器交互。
  */
 import { defineStore } from "pinia";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessageBox } from "element-plus";
+import { notifySuccess, notifyError } from "../ui/feedback";
 import {
   getRepoInfo,
   getStatus,
@@ -201,11 +202,7 @@ export const useConflictStore = defineStore("conflict", {
         }
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "读取冲突内容失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "读取冲突内容失败");
         this.result = null;
         this.choices = [];
       } finally {
@@ -249,14 +246,10 @@ export const useConflictStore = defineStore("conflict", {
         }
         this.savedChoices[file] = [...this.choices];
         if (!this.resolved.includes(file)) this.resolved.push(file);
-        ElMessage.success(`已解决 ${file}`);
+        notifySuccess(`已解决 ${file}`);
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "标记解决失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "标记解决失败");
         // 回退最近一次选择，允许用户重试
         this.choices[this.lastPickIdx] = null;
       } finally {
@@ -281,15 +274,11 @@ export const useConflictStore = defineStore("conflict", {
         } else {
           await sleep(600);
         }
-        ElMessage.success("合并完成");
+        notifySuccess("合并完成");
         this.backToCommit();
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "完成合并失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "完成合并失败");
       } finally {
         this.completing = false;
       }
@@ -317,15 +306,11 @@ export const useConflictStore = defineStore("conflict", {
         } else {
           await sleep(400);
         }
-        ElMessage.success("已中止合并，恢复到拉取前状态");
+        notifySuccess("已中止合并，恢复到拉取前状态");
         this.backToCommit();
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "中止合并失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "中止合并失败");
       }
     }
   }

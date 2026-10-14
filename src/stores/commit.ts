@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ElMessage } from "element-plus";
+import { notifySuccess, notifyError } from "../ui/feedback";
 import {
   getDiff,
   getIdentity,
@@ -336,15 +336,11 @@ export const useCommitStore = defineStore("commit", {
         await stageFiles(path, names);
         const r = await apiCommit(path, this.message.trim());
         await this.load(path);
-        ElMessage.success(`已提交 ${r.hash.slice(0, 7)} · ${names.length} 个文件`);
+        notifySuccess(`已提交 ${r.hash.slice(0, 7)} · ${names.length} 个文件`);
         useSessionStore().request = { ...useSessionStore().request, view: "push" };
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "提交失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "提交失败");
       } finally {
         this.committing = false;
       }
@@ -362,7 +358,7 @@ export const useCommitStore = defineStore("commit", {
       this.message = "";
       this.selected = null;
       this.committing = false;
-      ElMessage.success(`已提交 ${hash} · ${names.length} 个文件`);
+      notifySuccess(`已提交 ${hash} · ${names.length} 个文件`);
     }
   }
 });

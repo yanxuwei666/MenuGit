@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
-import { ElMessage } from "element-plus";
+import { notifySuccess, notifyError, notifyWarning } from "../ui/feedback";
 import {
   cancelClone,
   cloneRepo,
@@ -90,17 +90,13 @@ export const useRepoOpsStore = defineStore("repoops", {
       this.initializing = true;
       try {
         await initRepo(path);
-        ElMessage.success("仓库已创建");
+        notifySuccess("仓库已创建");
         const s = useSessionStore();
         s.request = { ...s.request, view: "commit" }; // commit store 会自动加载数据
       } catch (e) {
         // 已是仓库等错误：用 err.message 呈现（如"此处已在仓库 xxx 中"），不执行
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "初始化失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "初始化失败");
       } finally {
         this.initializing = false;
       }
@@ -111,7 +107,7 @@ export const useRepoOpsStore = defineStore("repoops", {
       this.initializing = true;
       await sleep(700);
       this.initializing = false;
-      ElMessage.success("仓库已创建");
+      notifySuccess("仓库已创建");
       const s = useSessionStore();
       s.request = { ...s.request, view: "commit" };
     },
@@ -124,7 +120,7 @@ export const useRepoOpsStore = defineStore("repoops", {
         return;
       }
       if (!s.request.path) {
-        ElMessage.warning("未指定目录路径");
+        notifyWarning("未指定目录路径");
         return;
       }
       await this.doInit(s.request.path);
@@ -169,7 +165,7 @@ export const useRepoOpsStore = defineStore("repoops", {
             this.unlisten?.();
             this.unlisten = null;
             this.phase = "done";
-            if (!p.error) ElMessage.success("克隆完成");
+            if (!p.error) notifySuccess("克隆完成");
           }
         });
       } catch (e) {
@@ -213,7 +209,7 @@ export const useRepoOpsStore = defineStore("repoops", {
         message: null
       };
       this.phase = "done";
-      ElMessage.success("克隆完成");
+      notifySuccess("克隆完成");
     },
 
     /** 克隆入口：按环境分发（重试也走这里，先重置流程） */
@@ -224,7 +220,7 @@ export const useRepoOpsStore = defineStore("repoops", {
         return;
       }
       if (!s.request.path) {
-        ElMessage.warning("未指定父目录路径");
+        notifyWarning("未指定父目录路径");
         return;
       }
       await this.startClone(s.request.path);
@@ -243,11 +239,7 @@ export const useRepoOpsStore = defineStore("repoops", {
         await cancelClone(this.repoKey);
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "取消失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "取消失败");
       }
     },
 
@@ -259,11 +251,7 @@ export const useRepoOpsStore = defineStore("repoops", {
         await invoke("open_dir", { path: this.targetDir });
       } catch (e) {
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "打开文件夹失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "打开文件夹失败");
       }
     },
 

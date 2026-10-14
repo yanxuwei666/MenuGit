@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ElMessage } from "element-plus";
+import { notifySuccess, notifyError } from "../ui/feedback";
 import { getSettings, setSettings, toGitError } from "../api";
 import { useSessionStore } from "./session";
 
@@ -40,21 +40,17 @@ export const useSettingsStore = defineStore("settings", {
       this.diagEnabled = v;
       const s = useSessionStore();
       if (!s.tauriReady) {
-        ElMessage.success("设置已保存");
+        notifySuccess("设置已保存");
         return;
       }
       this.saving = true;
       try {
         await setSettings({ diagEnabled: v });
-        ElMessage.success("设置已保存");
+        notifySuccess("设置已保存");
       } catch (e) {
         this.diagEnabled = prev;
         const err = toGitError(e);
-        ElMessage.error({
-          message: err.message || "保存设置失败",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || "保存设置失败");
       } finally {
         this.saving = false;
       }

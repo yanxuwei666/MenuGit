@@ -6,7 +6,7 @@
  */
 
 import { defineStore } from "pinia";
-import { ElMessage } from "element-plus";
+import { notifySuccess, notifyError } from "../ui/feedback";
 import {
   checkoutRemote,
   getRepoInfo,
@@ -171,7 +171,7 @@ export const useBranchStore = defineStore("branch", {
       this.lastError = null;
       try {
         await switchBranch(path, name);
-        ElMessage.success(`已切换到 ${name}`);
+        notifySuccess(`已切换到 ${name}`);
         await this.refresh(path);
         this.backToCommit();
       } catch (e) {
@@ -193,7 +193,7 @@ export const useBranchStore = defineStore("branch", {
       this.lastError = null;
       try {
         await checkoutRemote(path, name);
-        ElMessage.success(`已检出 ${name} 并建立跟踪`);
+        notifySuccess(`已检出 ${name} 并建立跟踪`);
         await this.refresh(path);
         this.backToCommit();
       } catch (e) {
@@ -217,7 +217,7 @@ export const useBranchStore = defineStore("branch", {
       this.lastError = null;
       try {
         await switchBranch(path, name, true);
-        ElMessage.success(`已创建并切换到 ${name}`);
+        notifySuccess(`已创建并切换到 ${name}`);
         this.newName = "";
         await this.refresh(path);
         this.backToCommit();
@@ -228,7 +228,7 @@ export const useBranchStore = defineStore("branch", {
       }
     },
 
-    /** 统一错误处理：归一化 + ElMessage + 保留原始 stderr 供 el-collapse 展开 */
+    /** 统一错误处理：归一化 + notifyError + 保留原始 stderr 供 el-collapse 展开 */
     handleError(e: unknown, fallback: string) {
       const err = toGitError(e);
       const overwritten =
@@ -242,18 +242,10 @@ export const useBranchStore = defineStore("branch", {
           stderr: err.stderr,
           files: overwrittenFiles(err.stderr)
         };
-        ElMessage.error({
-          message: "未提交修改无法自动携带，请先提交或放弃修改",
-          showClose: true,
-          duration: 5000
-        });
+        notifyError("未提交修改无法自动携带，请先提交或放弃修改");
       } else {
         this.lastError = { message: err.message || fallback, stderr: err.stderr, files: [] };
-        ElMessage.error({
-          message: err.message || fallback,
-          showClose: true,
-          duration: 5000
-        });
+        notifyError(err.message || fallback);
       }
     },
 
@@ -299,7 +291,7 @@ export const useBranchStore = defineStore("branch", {
         this.repo.branch = name;
         this.newName = "";
         this.busy = false;
-        ElMessage.success(`${text} ${name}`);
+        notifySuccess(`${text} ${name}`);
         this.backToCommit();
       }, 500);
     },
@@ -315,7 +307,7 @@ export const useBranchStore = defineStore("branch", {
         this.current = short;
         this.repo.branch = short;
         this.busy = false;
-        ElMessage.success(`已检出 ${name} 并建立跟踪`);
+        notifySuccess(`已检出 ${name} 并建立跟踪`);
         this.backToCommit();
       }, 500);
     }
