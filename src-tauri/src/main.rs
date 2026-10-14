@@ -49,6 +49,7 @@ fn main() {
             settings::set_settings,
             ops::status::get_repo_info,
             ops::status::get_status,
+            ops::status::get_identity,
             ops::diff::get_diff,
             ops::stage::stage_files,
             ops::stage::commit,

@@ -1,5 +1,16 @@
 import { defineStore } from "pinia";
 import { ElMessage } from "element-plus";
+import {
+  getDiff,
+  getIdentity,
+  getRepoInfo,
+  getStatus,
+  stageFiles,
+  commit as apiCommit,
+  toGitError,
+  type StatusFile
+} from "../api";
+import { useSessionStore } from "./session";
 
 /** diff 行类型：hunk 头 / 上下文 / 新增 / 删除（沿用原型类名） */
 export type DiffLineType = "hunk" | "ctxl" | "add" | "del";
@@ -9,20 +20,36 @@ export interface DiffLine {
   text: string;
 }
 
-/** 文件状态：M 修改 / A 新增 / D 删除 / U 未跟踪 / C 冲突 */
-export type FileStatus = "M" | "A" | "D" | "U" | "C";
+/** 文件状态：M 修改 / A 新增 / D 删除 / U 未跟踪 / R 重命名 / C 冲突 */
+export type FileStatus = "M" | "A" | "D" | "U" | "R" | "C";
 
 export const STATUS_LABEL: Record<FileStatus, string> = {
   M: "修改",
   A: "新增",
   D: "删除",
   U: "未跟踪",
+  R: "重命名",
   C: "冲突"
+};
+
+/** api StatusFile.status → 前端 FileStatus */
+const STATUS_MAP: Record<string, FileStatus> = {
+  modified: "M",
+  added: "A",
+  deleted: "D",
+  untracked: "U",
+  renamed: "R",
+  conflict: "C"
 };
 
 export interface ChangeFile {
   name: string;
   status: FileStatus;
+  /** 重命名的旧路径（旧名 → 新名） */
+  origPath?: string | null;
+  /** 增删行数（numstat；二进制/未跟踪为 null） */
+  added?: number | null;
+  deleted?: number | null;
   /** 勾选态：是否纳入本次提交 */
   checked: boolean;
   /** 二进制文件：不展示内容对比 */
@@ -30,21 +57,67 @@ export interface ChangeFile {
   diff: DiffLine[];
 }
 
-/** 勾选默认规则：修改/删除默认勾选，新增/未跟踪默认不勾选，冲突不可勾选 */
+/** 勾选默认规则：修改/删除/重命名默认勾选，新增/未跟踪默认不勾选，冲突不可勾选 */
 export function defaultChecked(f: ChangeFile): boolean {
   if (f.status === "C") return false;
-  return f.status === "M" || f.status === "D";
+  return f.status === "M" || f.status === "D" || f.status === "R";
 }
 
-/** 行内增删统计（演示数据，规则与原型一致）：删除文件不显示 */
+/** 行内增删统计：真实模式用 numstat 实数，mock 走启发式 */
 export function fileStat(f: ChangeFile): string {
-  if (f.status === "D" || f.binary) return "";
+  if (f.status === "D" || f.binary || f.status === "U") return "";
+  if (f.added != null) {
+    return `+${f.added}${f.deleted ? ` −${f.deleted}` : ""}`;
+  }
   const n = ((f.name.length * 7) % 40) + 6;
-  const del = f.status === "A" || f.status === "U" ? "" : ` −${(n % 9) + 1}`;
+  const del = f.status === "A" ? "" : ` −${(n % 9) + 1}`;
   return `+${n}${del}`;
 }
 
-/* ───────── mock 数据（取自原型演示数据） ───────── */
+/** 解析 git diff 文本为行模型（跳过 diff --git / index / --- / +++ 等头部行） */
+export function parseDiff(text: string): DiffLine[] {
+  const out: DiffLine[] = [];
+  for (const line of text.split("\n")) {
+    if (
+      line.startsWith("diff ") ||
+      line.startsWith("index ") ||
+      line.startsWith("--- ") ||
+      line.startsWith("+++ ") ||
+      line.startsWith("new file ") ||
+      line.startsWith("deleted file ") ||
+      line.startsWith("rename ") ||
+      line.startsWith("similarity ") ||
+      line.startsWith("old mode ") ||
+      line.startsWith("new mode ")
+    ) {
+      continue;
+    }
+    if (line.startsWith("@@")) out.push({ type: "hunk", text: line });
+    else if (line.startsWith("+")) out.push({ type: "add", text: line.slice(1) });
+    else if (line.startsWith("-")) out.push({ type: "del", text: line.slice(1) });
+    else if (line.startsWith(" ")) out.push({ type: "ctxl", text: line.slice(1) });
+    else if (line !== "") out.push({ type: "ctxl", text: line });
+  }
+  return out;
+}
+
+/** api StatusFile → 前端 ChangeFile（按默认勾选规则初始化勾选态） */
+function mapStatusFile(s: StatusFile): ChangeFile {
+  const f: ChangeFile = {
+    name: s.path,
+    status: STATUS_MAP[s.status] ?? "M",
+    origPath: s.origPath,
+    added: s.added,
+    deleted: s.deleted,
+    checked: false,
+    binary: s.binary,
+    diff: []
+  };
+  f.checked = defaultChecked(f);
+  return f;
+}
+
+/* ───────── mock 数据（浏览器调试用；取自原型演示数据） ───────── */
 
 const MOCK_DIFFS: Record<string, DiffLine[]> = {
   "src/app.py": [
@@ -98,15 +171,21 @@ function mockFile(name: string, status: FileStatus, opts?: { binary?: boolean })
 
 export const useCommitStore = defineStore("commit", {
   state: () => ({
-    /** 仓库 mock 信息 */
+    /** 真实仓库根路径；null = 浏览器 mock 模式 */
+    repoPath: null as string | null,
+    /** 仓库数据加载中 */
+    loading: false,
+    /** 加载失败信息 */
+    loadError: null as string | null,
+    /** 仓库信息（真实模式由 get_repo_info 填充） */
     repo: {
       name: "my-project",
       branch: "main",
-      upstream: "origin/main",
+      upstream: "origin/main" as string | null,
       ahead: 1,
       behind: 0
     },
-    /** 作者信息（mock：来自系统 Git 配置） */
+    /** 作者信息（来自系统 Git 配置；未设置时给出引导文案） */
     author: "yxw <yxw@example.com>",
     /** 文件名过滤关键字 */
     filter: "",
@@ -114,7 +193,7 @@ export const useCommitStore = defineStore("commit", {
     message: "",
     /** 当前在右侧预览 diff 的文件名 */
     selected: null as string | null,
-    /** 提交中（模拟 loading） */
+    /** 提交中 */
     committing: false,
     /** 变更文件列表 */
     files: [
@@ -158,6 +237,7 @@ export const useCommitStore = defineStore("commit", {
     /** 与上游的同步描述 */
     syncText(): string {
       const { ahead, behind, upstream } = this.repo;
+      if (!upstream) return "未设置上游分支";
       if (ahead > 0) return `领先 ${upstream} ${ahead} 个提交`;
       if (behind > 0) return `落后 ${upstream} ${behind} 个提交`;
       return `与 ${upstream} 同步`;
@@ -165,6 +245,62 @@ export const useCommitStore = defineStore("commit", {
   },
 
   actions: {
+    /** 载入真实仓库数据（Tauri 环境，由 App.vue 按 CLI 目标路径调用） */
+    async load(path: string) {
+      this.repoPath = path;
+      this.loading = true;
+      this.loadError = null;
+      try {
+        const [info, files, identity] = await Promise.all([
+          getRepoInfo(path),
+          getStatus(path),
+          getIdentity(path)
+        ]);
+        this.repo = {
+          name:
+            info.path
+              ?.replace(/[\\/]+$/, "")
+              .split(/[\\/]/)
+              .pop() || "仓库",
+          branch: info.branch ?? "(未检出)",
+          upstream: info.upstream,
+          ahead: info.ahead,
+          behind: info.behind
+        };
+        this.author = identity.name
+          ? `${identity.name}${identity.email ? ` <${identity.email}>` : ""}`
+          : "未设置（请在系统 Git 配置中设置 user.name / user.email）";
+        this.files = files.map(mapStatusFile);
+        this.filter = "";
+        this.message = "";
+        this.selected = null;
+      } catch (e) {
+        const err = toGitError(e);
+        this.loadError = err.message || "加载仓库状态失败";
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    /** 点击文件：选中并按需加载 diff（冲突文件显示占位；mock 模式用预置数据） */
+    async selectFile(name: string) {
+      this.selected = name;
+      const f = this.files.find((x) => x.name === name);
+      if (!f || this.repoPath == null || f.diff.length > 0) return;
+      if (f.status === "C") {
+        f.diff = CONFLICT_DIFF;
+        return;
+      }
+      try {
+        const r = await getDiff(this.repoPath, name);
+        f.binary = r.isBinary;
+        f.diff = r.isBinary ? [] : parseDiff(r.text);
+      } catch (e) {
+        const err = toGitError(e);
+        f.diff = [{ type: "ctxl", text: `读取差异失败：${err.message}` }];
+      }
+    },
+
     /** 切换单个文件勾选（冲突文件不可勾选） */
     toggleCheck(name: string) {
       const f = this.files.find((x) => x.name === name);
@@ -181,16 +317,46 @@ export const useCommitStore = defineStore("commit", {
       this.selected = null;
       this.files.forEach((f) => (f.checked = defaultChecked(f)));
     },
-    /** 模拟提交：loading → 成功提示 → 移除已提交文件 → 领先数 +1 */
+    /** 提交入口：按模式分发 */
     async doCommit() {
       if (!this.canCommit) return;
+      if (this.repoPath == null) {
+        await this.mockCommit();
+      } else {
+        await this.realCommit();
+      }
+    },
+
+    /** 真实提交：暂存勾选文件 → git commit → 刷新 → 闭环进入推送面板（PRD FM-02） */
+    async realCommit() {
+      const path = this.repoPath!;
+      this.committing = true;
+      try {
+        const names = this.files.filter((f) => f.checked).map((f) => f.name);
+        await stageFiles(path, names);
+        const r = await apiCommit(path, this.message.trim());
+        await this.load(path);
+        ElMessage.success(`已提交 ${r.hash.slice(0, 7)} · ${names.length} 个文件`);
+        useSessionStore().request = { ...useSessionStore().request, view: "push" };
+      } catch (e) {
+        const err = toGitError(e);
+        ElMessage.error({
+          message: err.message || "提交失败",
+          showClose: true,
+          duration: 5000
+        });
+      } finally {
+        this.committing = false;
+      }
+    },
+
+    /** 浏览器 mock 提交（无 Tauri 环境时保持原演示流程） */
+    async mockCommit() {
       this.committing = true;
       const names = this.files.filter((f) => f.checked).map((f) => f.name);
-      // 模拟 git commit 耗时，不发起任何真实调用
       await new Promise((r) => setTimeout(r, 800));
       const hash = Math.random().toString(16).slice(2, 9);
       this.repo.ahead++;
-      // 已提交文件从变更列表移除，剩余文件勾选恢复默认
       this.files = this.files.filter((f) => !f.checked);
       this.files.forEach((f) => (f.checked = defaultChecked(f)));
       this.message = "";

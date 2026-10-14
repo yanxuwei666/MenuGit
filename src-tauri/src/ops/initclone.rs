@@ -83,6 +83,7 @@ pub fn clone_repo(
     let cancel = git::register_cancel(&repo_key);
 
     let key_for_thread = repo_key.clone();
+    let target_for_thread = target_str.clone();
     std::thread::spawn(move || {
         let cb_key = key_for_thread.clone();
         let app_for_cb = app.clone();
@@ -107,7 +108,7 @@ pub fn clone_repo(
             ..Default::default()
         };
 
-        let result = git::run(&["clone", "--progress", &url, &target_str], &opts);
+        let result = git::run(&["clone", "--progress", &url, &target_for_thread], &opts);
         git::unregister_cancel(&key_for_thread);
 
         let payload = match result {

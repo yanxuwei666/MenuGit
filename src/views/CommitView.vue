@@ -37,13 +37,25 @@ function onKeydown(e: KeyboardEvent) {
     </div>
 
     <div class="mbody">
+      <!-- 加载中 / 加载失败（真实模式） -->
+      <div v-if="store.loading" class="empty">
+        <div class="big">…</div>
+        正在读取仓库状态…
+      </div>
+      <div v-else-if="store.loadError" class="empty">
+        <div class="big err">✕</div>
+        {{ store.loadError }}
+      </div>
+
       <!-- 工作区干净：空状态（文案参照原型） -->
-      <div v-if="store.files.length === 0" class="empty">
+      <div v-else-if="store.files.length === 0" class="empty">
         <div class="big">✔</div>
         工作区干净，{{
           store.repo.ahead > 0
             ? `领先 ${store.repo.upstream} ${store.repo.ahead} 个提交`
-            : `与 ${store.repo.upstream} 同步，等待下一次修改`
+            : store.repo.upstream
+              ? `与 ${store.repo.upstream} 同步，等待下一次修改`
+              : "尚未设置上游分支"
         }}
       </div>
 
@@ -103,7 +115,7 @@ function onKeydown(e: KeyboardEvent) {
                 :key="f.name"
                 class="f-li"
                 :class="{ sel: store.selected === f.name }"
-                @click="store.selected = f.name"
+                @click="store.selectFile(f.name)"
               >
                 <el-checkbox
                   v-model="f.checked"
@@ -113,7 +125,7 @@ function onKeydown(e: KeyboardEvent) {
                 <el-tag class="st" :class="'st-' + f.status" size="small" round>
                   {{ STATUS_LABEL[f.status] }}
                 </el-tag>
-                <span class="nm">{{ f.name }}</span>
+                <span class="nm">{{ f.origPath ? `${f.origPath} → ${f.name}` : f.name }}</span>
                 <span class="stat">{{ fileStat(f) }}</span>
               </div>
               <div v-if="store.filteredFiles.length === 0" class="diff-empty">无匹配文件</div>
@@ -138,7 +150,7 @@ function onKeydown(e: KeyboardEvent) {
 
         <!-- 底部：作者 + 取消 + 提交 -->
         <div class="win-foot">
-          <span class="author">作者：{{ store.author }}（来自系统 Git 配置）</span>
+          <span class="author">作者：{{ store.author }}<template v-if="!store.author.startsWith('未设置')">（来自系统 Git 配置）</template></span>
           <el-button class="btn-cancel" @click="store.resetForm">取消</el-button>
           <el-button
             type="primary"
@@ -362,6 +374,11 @@ function onKeydown(e: KeyboardEvent) {
     --el-tag-text-color: var(--bad);
     --el-tag-border-color: transparent;
   }
+  &.st-R {
+    --el-tag-bg-color: var(--info-soft);
+    --el-tag-text-color: var(--info);
+    --el-tag-border-color: transparent;
+  }
   &.st-U {
     --el-tag-bg-color: var(--purple-soft);
     --el-tag-text-color: var(--purple);
@@ -448,6 +465,10 @@ function onKeydown(e: KeyboardEvent) {
     font-size: 34px;
     margin-bottom: 8px;
     color: var(--ok);
+
+    &.err {
+      color: var(--bad);
+    }
   }
 }
 

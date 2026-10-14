@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, watch } from "vue";
 import { useSessionStore } from "./stores/session";
+import { useCommitStore } from "./stores/commit";
 import CommitView from "./views/CommitView.vue";
 
 const session = useSessionStore();
+const commit = useCommitStore();
 
-onMounted(() => {
-  session.init();
+/** Tauri 环境：按 CLI 目标路径加载真实仓库数据；浏览器环境保持 mock 演示数据 */
+function syncCommit() {
+  if (session.tauriReady && session.request.path) {
+    commit.load(session.request.path);
+  }
+}
+
+onMounted(async () => {
+  await session.init();
+  syncCommit();
 });
+
+// 二次拉起（单实例转发 cli-args）时跟随新目标重载
+watch(() => session.request, syncCommit);
 </script>
 
 <template>

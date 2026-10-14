@@ -105,3 +105,24 @@ fn sum(a: Option<u64>, b: Option<u64>) -> Option<u64> {
         (x, y) => Some(x.unwrap_or(0) + y.unwrap_or(0)),
     }
 }
+
+/// 系统 Git 身份（user.name / user.email），提交窗口作者行展示（R2：只读复用系统配置）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Identity {
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
+
+/// 读取系统 Git 身份配置；未设置的字段为 null，由前端给出引导文案
+#[tauri::command]
+pub fn get_identity(path: String) -> Result<Identity, GitError> {
+    let root = repo_root(&path)?;
+    let read = |key: &str| -> Option<String> {
+        git::run(&["config", "--get", key], &git::RunOptions::local(&root))
+            .ok()
+            .map(|o| o.stdout.trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    Ok(Identity { name: read("user.name"), email: read("user.email") })
+}

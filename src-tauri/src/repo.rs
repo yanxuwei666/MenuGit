@@ -245,7 +245,7 @@ pub fn status_label(entry: &PorcelainEntry) -> &'static str {
         return "untracked";
     }
     let x = entry.xy.as_bytes().first().copied().unwrap_or(b'.');
-    let y = entry.xy.as_bytes().nth(1).copied().unwrap_or(b'.');
+    let y = entry.xy.as_bytes().get(1).copied().unwrap_or(b'.');
     if x == b'R' || y == b'R' || x == b'C' || y == b'C' {
         "renamed"
     } else if x == b'A' || y == b'A' {

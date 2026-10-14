@@ -2,7 +2,7 @@
 
 > 本文件是 AI 协作交接文档：记录项目概况、已确认决策、当前进度与下一步计划，供后续 AI 会话（或新协作者）快速接续工作。**每次完成一个阶段性节点，应更新本文件。**
 >
-> 最后更新：2026-10-13 ｜ 当前阶段：M2（Rust git 执行层）代码已写完、**尚未编译验证**
+> 最后更新：2026-10-14 ｜ 当前阶段：M2 完成（编码 + 前端接线 + 编译验证），下一步 M3（Windows COM DLL）
 
 ---
 
@@ -59,7 +59,7 @@ npm run tauri dev
 | 里程碑 | 状态 | 说明 |
 | --- | --- | --- |
 | M1 GUI 骨架 + 提交窗口迁移 | ✅ 完成 | 前端 `npm run build` 通过 |
-| M2 Rust git 执行层 | 🔶 代码已写完，**未编译验证** | 见 §5 明细 |
+| M2 Rust git 执行层 | ✅ 完成 | cargo check / cargo build / npm run build 全部通过；api.ts 已与 Rust 签名核对一致 |
 | M3 Windows COM DLL | ⬜ 未开始 | 第一步先做"最小 DLL 出现在右键菜单"技术验证 |
 | M4 Ubuntu 闭环 / M5 macOS 闭环 / M6 收尾 | ⬜ 未开始 | — |
 
@@ -92,20 +92,26 @@ MenuGit/
 
 `get_cli_args`、`settings::get_settings/set_settings`、`ops::status::get_repo_info/get_status`、`ops::diff::get_diff`、`ops::stage::stage_files/commit`、`ops::sync::push/pull`、`ops::branch::list_branches/switch_branch/checkout_remote`、`ops::logop::get_log`、`ops::discard::discard_changes`、`ops::conflict::get_conflict_file/resolve_conflict_file/complete_merge/abort_merge`、`ops::initclone::init_repo/clone_repo/cancel_clone`（clone 进度走 `clone-progress` 事件）。
 
-### 5.3 ⚠️ 未验证 / 未完成事项（接手 AI 优先处理）
+### 5.3 当前剩余事项（接手 AI 优先处理）
 
-1. **cargo check 从未运行过**（`src-tauri/target/` 不存在）。后台实现代理在写完代码后被手动停止，编译错误未知。→ 先按 §3 命令模板跑 `cargo check`，逐个修复编译错误。
-2. **api.ts 与 Rust command 的入参/出参类型一致性未核对**（代理分两步写，可能存在字段名/可选性不一致）。→ cargo check 通过后逐命令比对。
-3. **前端视图仍是 mock**：CommitView/commit.ts 尚未接线到真实 invoke（原计划 M2 第二阶段做）。→ 接线时保留"无 Tauri 环境时回退 mock"的能力（session.ts 已有 `tauriReady` 判断）。
-4. 提交闭环（提交成功 → 自动切推送面板）尚未实现，推送面板本身还是占位视图。
-5. `npm run tauri dev` 桌面窗口尚未验证过（依赖前两项完成）。
+1. **提交闭环只差推送面板**：提交成功后已自动切换到 push 视图（App.vue 中为占位空状态）。下一步实现推送面板（FM-04：目标分支选择、新建远端分支提示、结果反馈），拉取面板（FM-03）同构实现。
+2. **桌面窗口冒烟未做**：`npm run tauri dev` 会开窗口、需要人工确认，故未自动运行。已验证到 `cargo build` 产出 `src-tauri/target/debug/menugit.exe`（13MB）。冒烟建议：`npm run tauri dev` 后手动执行 `target\debug\menugit.exe commit --path <任意仓库>` 或在 devUrl 中查看。
+3. **前端其余视图**（branch/log/discard/conflict/init/clone/settings）仍为占位，按 M2+ 计划用真实 api.ts 逐步接线；api.ts 已提供全部命令封装。
+4. `src/api.ts` 与 Rust 签名一致性已逐命令核对（2026-10-14），后续新增命令需同步维护。
+
+### 5.4 M2 实现细节备忘
+
+- Rust 侧共 22 个 Tauri command（21 个原有 + `ops::status::get_identity` 读系统 Git 身份），注册于 main.rs。
+- 前端接线采用**双模式**：`stores/commit.ts` 的 `repoPath` 为 null 时走 mock（浏览器调试），Tauri 环境由 `App.vue` 在 `session.init()` 后按 CLI `--path` 调 `commit.load(path)`；二次拉起经 `watch(session.request)` 跟随新目标重载。
+- diff 解析在纯前端完成：`parseDiff()` 把 `get_diff` 返回的统一 diff 文本转为 hunk/ctxl/add/del 行模型；冲突文件点击显示占位提示（走独立冲突编辑器）。
+- cargo 镜像：`src-tauri/.cargo/config.toml` 配置了 rsproxy.cn（代理不稳定时的兜底），删除该文件即恢复官方源。
 
 ## 6. 下一步执行顺序
 
-1、跑 `cargo check` 并修复全部编译错误（注意代理环境变量）。
-2、核对 `src/api.ts` 与 Rust 命令签名/结构体字段一致性，修正不一致处。
-3、前端接线：commit store 从 mock 切到 `api.ts`（get_repo_info/get_status/get_diff/stage_files/commit），提交成功后切换到 push 占位视图（事件流按 PRD 闭环：提交 → 自动推送面板 → 取消时按工作区是否干净决定关闭或返回）。
-4、`npm run tauri dev` 在真实仓库上手工验证：状态列表、diff、勾选默认规则（修改/删除默认勾选、未跟踪不勾选、冲突不可勾选）、提交后文件消失、领先计数变化。
+1、实现推送面板（FM-04）与拉取面板（FM-03）：同构对话框（本地分支 + 远端/分支选择、新建远端分支确认、进行中状态、结果摘要/失败可读原因），完成后把 realCommit 的闭环从"切占位视图"改为真实推送流程。
+2、分支窗口（FM-05）、日志窗口（FM-06）接线：api.ts 的 listBranches/switchBranch/getLog 已就绪。
+3、放弃修改（FM-07，含 R4 二次确认）与冲突解决（FM-08 三选一合并编辑器，get_conflict_file/resolve_conflict_file 已就绪）。
+4、init/clone/settings 接线，完成全部 P0 视图。
 5、进入 M3：Windows COM DLL 最小验证（Rust cdylib + windows-rs 实现 IContextMenu/IShellExtInit，注册到 HKCU\Software\Classes，先让"MenuGit (main)"出现在右键菜单并能拉起主程序，再做完整 7+1 菜单）。
 
 ## 7. 工作约定（给后续 AI 的红线）

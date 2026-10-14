@@ -206,6 +206,15 @@ export interface AppSettings {
 /** 仓库概要：根目录 / 分支 / 上游 / 领先落后 / 合并冲突状态 */
 export const getRepoInfo = (path: string) => call<RepoInfo>("get_repo_info", { path });
 
+/** 系统 Git 身份（user.name / user.email；未设置的字段为 null） */
+export interface Identity {
+  name: string | null;
+  email: string | null;
+}
+
+/** 读取系统 Git 身份配置（R2：只读复用，供提交窗口作者行展示） */
+export const getIdentity = (path: string) => call<Identity>("get_identity", { path });
+
 /** 工作区变更文件列表 */
 export const getStatus = (path: string) => call<StatusFile[]>("get_status", { path });
 

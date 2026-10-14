@@ -131,7 +131,9 @@ fn validate_relative(root: &Path, file: &str) -> Result<std::path::PathBuf, GitE
 /// 返回 (段落列表, 冲突块数)。
 pub fn parse_conflict_text(text: &str) -> (Vec<ConflictSection>, u32) {
     let raw_lines: Vec<&str> = text.split('\n').collect();
-    let clean = |l: &str| l.strip_suffix('\r').unwrap_or(l);
+    fn clean(l: &str) -> &str {
+        l.strip_suffix('\r').unwrap_or(l)
+    }
 
     let mut sections: Vec<ConflictSection> = Vec::new();
     let mut context: Vec<String> = Vec::new();
