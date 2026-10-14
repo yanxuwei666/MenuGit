@@ -1,8 +1,21 @@
-# menugit-shell —— Windows 资源管理器右键菜单 COM Shell 扩展（最小技术验证）
+# menugit-shell —— Windows 资源管理器右键菜单 COM Shell 扩展
 
-对应 `docs/TechSpec-MenuGit.md` §3.4/§5.1（方案 A，TortoiseGit 同款机制）的 M3 里程碑第一步：
+对应 `docs/TechSpec-MenuGit.md` §3.4/§5.1（方案 A，TortoiseGit 同款机制）：
 一个 Rust `cdylib`，实现 `IContextMenu` + `IShellExtInit` 进程内 COM 组件，注册后在
-**目录右键 / 目录空白处右键**菜单中显示静态 "MenuGit" 项，点击后经 CLI 协议拉起 Tauri 主程序。
+**目录右键 / 目录空白处右键**菜单中按场景插入动态 "MenuGit" 子菜单，点击后经 CLI 协议拉起 Tauri 主程序。
+
+## 菜单形态（运行时动态判定）
+
+从选中目录（多选取第一个目录项；选中文件取其所在目录）向上最多 16 层查找 `.git`（目录或 worktree 文件均算）：
+
+- **仓库内**：`MenuGit (分支名)`（分支读 `<仓库根>\.git\HEAD`，detached 显示前 7 位哈希，读失败不带括号）▸
+  提交… / 拉取 / 推送 / 分支… / 日志… / 放弃修改… / 解决冲突…（无 `MERGE_HEAD` 时置灰） ─ 分隔线 ─ 设置…
+- **非仓库**：`MenuGit` ▸ 在此初始化 Git 仓库 / 克隆仓库到此处… ─ 分隔线 ─ 设置…
+
+命令偏移（相对 `idCmdFirst`，子菜单项从 +1 起）：仓库内 1..7 对应
+commit/pull/push/branch/log/discard/conflict、9=设置（8 为分隔线）；
+非仓库 1=init、2=clone、4=设置（3 为分隔线）。`QueryContextMenu` 返回 `最大偏移+1`（等价 `MAKEULRESULT`）。
+
 
 **本阶段仅完成编码与编译验证；未执行 regsvr32、未写注册表**（需宿主与用户确认后操作）。
 
@@ -47,7 +60,8 @@ regsvr32 /u /n /i:user "D:\Code\personal\MenuGit\src-tauri-shell\target\debug\me
 | `HKCU\Software\Classes\Directory\Background\shellex\ContextMenuHandlers\MenuGit` | `(默认)` = `{D4A7C1E9-…}` | 目录空白处右键 |
 | `HKCU\Software\MenuGit\ExePath`（**只读**） | 主程序 exe 绝对路径 | `InvokeCommand` 读取；安装器/主程序负责写入，读不到则静默跳过 |
 
-运行时行为：`InvokeCommand` 执行 `menugit commit --path <选中目录>`（CLI 协议见 TechSpec §6）。
+运行时行为：`InvokeCommand` 执行 `menugit <视图> --path <目标目录>`；视图为
+`commit/pull/push/branch/log/discard/conflict/settings`（仓库内）或 `init/clone/settings`（非仓库，settings 也带 `--path`，主程序可忽略）。CLI 协议见 TechSpec §6。
 
 ## 已验证 / 未验证
 
@@ -57,16 +71,16 @@ regsvr32 /u /n /i:user "D:\Code\personal\MenuGit\src-tauri-shell\target\debug\me
 - 注册表写入/删除逻辑为纯 HKCU 操作（RegCreateKeyExW/RegSetValueExW/RegDeleteTreeW），未实际执行。
 
 **未验证（需实机注册后确认）**
-- Explorer 实际加载 DLL、右键菜单显示、状态栏帮助文本（GCS_HELPTEXTW）。
+- Explorer 实际加载 DLL、右键菜单动态子菜单显示（分支名/置灰态）、状态栏帮助文本（GCS_HELPTEXTW）。
 - 点击菜单项拉起主程序（依赖 `HKCU\Software\MenuGit\ExePath` 先写入）。
-- `DllCanUnloadNow` 恒返回 S_OK 的简化实现：Explorer 理论上可能在对象存活时卸载 DLL（MVP 接受；
-  正确做法需维护模块锁计数）。
-- 多选混合（文件+目录）、超长路径、非 UTF-16 可表示路径等边界。
+- 超长路径、非 UTF-16 可表示路径、网络驱动器等边界。
 - Win11 新版菜单不显示本项（预期行为：位于"显示更多选项"经典菜单内，与 TortoiseGit 一致）。
 
 ## 已知简化项
 
-- 菜单为静态 "MenuGit" 文本 + 一条禁用的路径提示项；分支名动态显示留待后续里程碑。
-- `GetCommandString` 仅支持 `GCS_HELPTEXTW`（其 COM 签名 pszName 为 LPSTR，宽文本按 PWSTR 写入，与官方约定一致）。
-- 非目录选择时 `IShellExtInit::Initialize` 返回 E_FAIL 拒绝。
-- 文件（`*`）与驱动器（`Drive`）挂载点未注册，仅 `Directory` 与 `Directory\Background`。
+- 仓库判定只看 `.git` 是否存在，不校验 HEAD 内容；worktree（`.git` 为文件）按仓库处理，但分支名读取仍走
+  `<仓库根>\.git\HEAD`，worktree 下读不到 → 标题显示为不带分支的 "MenuGit"。
+- `GetCommandString` 仅支持 `GCS_HELPTEXTW`，所有命令返回同一句帮助文本（其 COM 签名 pszName 为 LPSTR，
+  宽文本按 PWSTR 写入，与官方约定一致）。
+- 选中文件时不做文件级预选，仅取其所在目录作为 `--path`。
+- `DllCanUnloadNow` 恒返回 S_OK 的简化实现（正确做法需维护模块锁计数）。
