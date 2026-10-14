@@ -65,9 +65,10 @@ const MENU_HELP: &str = "在文件管理器中完成常用 Git 操作";
 /// 注册表：CLSID 注册根（per-user，免管理员）
 const REG_CLSID_KEY: &str = "Software\\Classes\\CLSID\\{D4A7C1E9-3F2B-4E86-9C51-A0B2C3D4E5F6}";
 /// 目录右键 / 目录空白处右键的挂载点
+/// 挂载点基键：注册时在其下追加 `shellex\ContextMenuHandlers\MenuGit`
 const REG_HANDLER_KEYS: [&str; 2] = [
-    "Software\\Classes\\Directory\\shellex\\ContextMenuHandlers\\MenuGit",
-    "Software\\Classes\\Directory\\Background\\shellex\\ContextMenuHandlers\\MenuGit",
+    "Software\\Classes\\Directory",
+    "Software\\Classes\\Directory\\Background",
 ];
 /// 主程序路径配置（安装器负责写入；读不到则 InvokeCommand 静默跳过）
 const REG_APP_SUBKEY: &str = "Software\\MenuGit";
