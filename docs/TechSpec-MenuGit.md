@@ -18,7 +18,7 @@
 | Windows 菜单 | **COM Shell Extension DLL**（Rust cdylib） | 唯一能动态显示"分支名"的通用方案；Win10/Win11 经典菜单全覆盖 |
 | macOS 菜单 | **FinderSync 扩展**（Swift） | Apple 官方唯一正规右键扩展途径，菜单可动态构建 |
 | Ubuntu 菜单 | **python3-nautilus 扩展** | Nautilus 46（GNOME 46）官方扩展机制，实现最轻 |
-| 扩展 ↔ GUI 通信 | **CLI 参数拉起进程** | 无常驻后台服务；分支名由扩展直接读 `.git/HEAD`，毫秒级 |
+| 扩展 ↔ GUI 通信 | **CLI 参数 / macOS 深链** | 无常驻后台服务；macOS Finder 扩展在沙盒内无法传 argv，改用 `menugit://` URL；分支名由扩展直接读 `.git/HEAD`，毫秒级 |
 | 单实例 | tauri-plugin-single-instance | 重复点击菜单时参数转发给现有实例，避免多窗口 |
 
 平台基线（低于基线不做兼容承诺，安装时可提示）：
@@ -39,9 +39,9 @@
 文件管理器进程（Explorer / Finder / Nautilus）
 └─ MenuGit 菜单扩展（进程内加载）
    ├─ 弹出菜单时：直接读 <repo>/.git/HEAD → 显示 "MenuGit (main)"
-   └─ 点击菜单项：spawn 主程序 CLI 参数
-        ↓  menugit commit --path <dir>
-MenuGit 主程序（Tauri v2，单实例，参数转发）
+   └─ 点击菜单项：Windows/Linux spawn 主程序 CLI 参数；macOS 打开 menugit:// 深链
+        ↓  menugit commit --path <dir>  或  menugit://commit?path=<dir>
+MenuGit 主程序（Tauri v2，单实例，参数转发 / 深链路由）
 ├─ Vue 3 界面（WebView）：提交 / 拉取 / 推送 / 分支 / 日志 / 冲突 / 设置
 └─ Rust 薄核心：仓库发现 → 并发锁 → spawn git → 解析输出 → 事件回传
       ↓  子进程
@@ -51,6 +51,7 @@ MenuGit 主程序（Tauri v2，单实例，参数转发）
 要点：
 
 - 菜单扩展内**不 spawn git**：分支名直接解析 `.git/HEAD`（`ref: refs/heads/<name>`，detached HEAD 时显示短 hash），保证菜单秒开且不拖慢文件管理器。
+- macOS Finder 扩展运行在 App Sandbox 中，LaunchServices 会丢弃 `OpenConfiguration.arguments` 传入的 argv，因此菜单动作改用 `menugit://` URL；主程序在 `RunEvent::Opened` 中解析并复用 CLI 路由。空参数二次启动只聚焦窗口，不清空当前仓库。
 - 扩展内代码必须防御性编写：任何异常吞掉并降级为"无分支名显示"，绝不能让 Explorer/Finder/Nautilus 崩溃。
 - 主程序是唯一执行 git 的进程，扩展只负责"显示 + 拉起"。
 
@@ -100,7 +101,7 @@ MenuGit/
 | 解决冲突 | 写回结果文件后 `git add <file>`；完成合并 `git commit -F -`；中止 `git merge --abort` |
 | 初始化 / 克隆 | `git init`；`git clone <url> <dir> --progress`（进度从 stderr sideband 解析） |
 
-凭证、代理、diff 工具、pull 策略等一律不传参，完全交给系统 Git 配置（R2）。
+凭证、代理、diff 工具、pull 策略等一律不传参，完全交给系统 Git 配置（R2）。例外：macOS 上用户在应用内配置的 HTTPS 凭据经 `git credential approve` 存入钥匙串，网络命令只追加系统自带的 osxkeychain helper 读取；令牌始终通过 stdin 传递，不进入命令行与日志。
 
 ### 3.3 冲突解决器
 

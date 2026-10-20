@@ -120,6 +120,8 @@ pub struct RunOptions {
     pub accept_exit_codes: Vec<i32>,
     /// stderr 增量回调（按 \r / \n 分行）
     pub on_stderr_text: Option<StderrCallback>,
+    /// 网络命令是否使用 macOS 钥匙串助手（显式指定的凭据在钥匙串中）
+    pub use_keychain: bool,
 }
 
 impl RunOptions {
@@ -132,11 +134,13 @@ impl RunOptions {
         }
     }
 
-    /// 网络操作（push/pull），默认 600 秒超时
+    /// 网络操作（push/pull），默认 600 秒超时。
+    /// 显式追加 osxkeychain 助手：系统未配置 credential.helper 时也能读取应用内保存的凭据。
     pub fn net(cwd: impl Into<PathBuf>) -> Self {
         RunOptions {
             cwd: cwd.into(),
             timeout: Some(Duration::from_secs(600)),
+            use_keychain: cfg!(target_os = "macos"),
             ..Default::default()
         }
     }
@@ -291,6 +295,9 @@ fn classify_failure(stderr: &str) -> GitError {
         || s.contains("could not read from remote repository")
         || s.contains("permission denied (publickey)")
         || s.contains("terminal prompts disabled")
+        || s.contains("support for password authentication was removed")
+        || s.contains("invalid username or password")
+        || s.contains("bad credentials")
     {
         GitError::new(
             GitErrorKind::AuthRejected,
@@ -329,8 +336,13 @@ pub fn run(args: &[&str], opts: &RunOptions) -> Result<GitOutput, GitError> {
     let mut cmd = Command::new(exe);
     cmd.arg("--no-pager")
         .arg("-c")
-        .arg("core.quotepath=false")
-        .args(args)
+        .arg("core.quotepath=false");
+    // 不改用户的全局 git 配置：仅在应用发起的网络命令中追加钥匙串助手。
+    #[cfg(target_os = "macos")]
+    if opts.use_keychain {
+        cmd.arg("-c").arg("credential.helper=osxkeychain");
+    }
+    cmd.args(args)
         .current_dir(&opts.cwd)
         .env("LC_ALL", "C")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -459,4 +471,35 @@ pub fn run(args: &[&str], opts: &RunOptions) -> Result<GitOutput, GitError> {
         elapsed,
     );
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_failure, GitErrorKind};
+
+    #[test]
+    fn classifies_https_credential_and_ssh_auth_failures() {
+        for stderr in [
+            "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+            "remote: Support for password authentication was removed on August 13, 2021.",
+            "remote: Invalid username or password.",
+            "fatal: Authentication failed for 'https://github.com/team/repo.git/'",
+            "git@github.com: Permission denied (publickey).",
+            "fatal: could not read from remote repository.",
+        ] {
+            assert_eq!(classify_failure(stderr).kind, GitErrorKind::AuthRejected);
+        }
+    }
+
+    #[test]
+    fn keeps_network_and_lock_failures_distinct_from_auth() {
+        assert_eq!(
+            classify_failure("fatal: unable to access 'https://github.com/x/y.git/': Could not resolve host: github.com").kind,
+            GitErrorKind::Network
+        );
+        assert_eq!(
+            classify_failure("fatal: Unable to create '.git/index.lock': File exists.").kind,
+            GitErrorKind::Locked
+        );
+    }
 }

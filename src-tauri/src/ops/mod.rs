@@ -3,6 +3,7 @@
 //! 子模块按功能划分；本文件提供所有写操作共用的入口：
 //! 入参校验（目录存在、非绝对路径）→ 合并冲突状态拦截（R3）→ 获取仓库写锁 → 执行。
 
+pub mod auth;
 pub mod branch;
 pub mod conflict;
 pub mod diff;

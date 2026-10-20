@@ -115,6 +115,16 @@ export interface AuthorIdentity {
   email: string | null;
 }
 
+/** 可配置 HTTPS 凭据的远端（SSH / 未配置远端时为 null） */
+export interface HttpsRemoteInfo {
+  /** 远端名，通常是 origin */
+  remote: string;
+  /** 主机[:端口]，用于钥匙串匹配 */
+  host: string;
+  /** 远端 URL 自带用户名（通常为 null） */
+  username: string | null;
+}
+
 /** 拉取结果摘要 */
 export interface PullResult {
   /** 拉入的提交数（解析失败为 null） */
@@ -258,6 +268,17 @@ export const commit = (path: string, message: string, files: string[]) =>
 /** 读取系统 Git 当前提交身份 */
 export const getAuthorIdentity = (path: string) =>
   call<AuthorIdentity>("get_author_identity", { path });
+
+/** 读取仓库的 HTTPS 远端；SSH 或未配置远端时为 null */
+export const getHttpsRemote = (path: string) =>
+  call<HttpsRemoteInfo | null>("get_https_remote", { path });
+
+/** 把 HTTPS 用户名 + 密码/令牌写入 macOS 钥匙串（令牌只经 stdin，不进命令行） */
+export const saveHttpsCredential = (host: string, username: string, secret: string) =>
+  call<void>("save_https_credential", { host, username, secret });
+
+/** 在系统浏览器打开 GitHub Token 创建页 */
+export const openGitHubTokens = () => call<void>("open_github_tokens");
 
 /** 推送：git push [-u] origin <branch>；branch 缺省为当前分支 */
 export const push = (path: string, branch?: string, setUpstream?: boolean) =>

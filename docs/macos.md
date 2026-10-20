@@ -25,6 +25,23 @@ DMG 使用 `hdiutil create` 生成，不挂载镜像、不启动应用，也不�
 
 本机开发包默认使用 ad-hoc 签名，首次打开时 macOS 可能要求用户在隐私与安全设置中确认。正式分发需要 Developer ID Application 证书与 Apple 公证凭据；构建脚本支持通过 `APPLE_SIGNING_IDENTITY` 传入签名身份。
 
+## HTTPS 凭据（macOS 钥匙串）
+
+GitHub 的 HTTPS 远端在系统没有可用凭据时，git 在 `GIT_TERMINAL_PROMPT=0` 下只会报 `could not read Username ...: terminal prompts disabled`。应用在推送或拉取认证失败时显示“配置 HTTPS 凭据”入口，只需配置一次：
+
+- 只支持 HTTPS 远端；SSH 远端会提示改用 SSH 密钥或切换远端地址。
+- GitHub 已不接受账户密码，必须使用 Personal Access Token（classic，勾选 `repo` 权限）作为密码。
+- 用户名和令牌通过 stdin 交给 `git credential approve` 写入 macOS 钥匙串；写入前清空 helper 链，避免全局 `store` 等助手同时收到明文令牌。保存后会回读校验并自动重试。
+- 应用发起的 push / pull / clone 追加系统自带的 `credential.helper=osxkeychain` 读取凭据，不修改用户的全局 git 配置；令牌不进入命令行、URL、仓库文件或诊断日志。
+
+钥匙串读写可用假主机做无痕验证：
+
+```sh
+printf 'protocol=https\nhost=menugit-probe.invalid\nusername=probe\npassword=probe\n\n' | git -c credential.helper=osxkeychain credential approve
+printf 'protocol=https\nhost=menugit-probe.invalid\n\n' | git -c credential.helper=osxkeychain credential fill
+printf 'protocol=https\nhost=menugit-probe.invalid\nusername=probe\npassword=probe\n\n' | git -c credential.helper=osxkeychain credential reject
+```
+
 ## 后台验证范围
 
 菜单回归测试不会启动应用窗口或改变前台焦点：

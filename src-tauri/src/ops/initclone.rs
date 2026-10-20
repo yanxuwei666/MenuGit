@@ -96,7 +96,6 @@ pub fn clone_repo(
         let cb_key = key_for_thread.clone();
         let app_for_cb = app.clone();
         let opts = git::RunOptions {
-            cwd: parent,
             timeout: None, // 克隆不限时，靠取消标记终止
             cancel: Some(cancel),
             on_stderr_text: Some(Arc::new(move |line: &str| {
@@ -113,7 +112,8 @@ pub fn clone_repo(
                     },
                 );
             })),
-            ..Default::default()
+            // 私有仓库可复用应用内保存的钥匙串凭据。
+            ..git::RunOptions::net(parent)
         };
 
         let result = git::run(

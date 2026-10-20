@@ -22,10 +22,11 @@ MenuGit 是跨平台轻量级 Git 桌面工具：安装后集成进系统文件�
 | 前端 | Vue 3 + Vite + TypeScript + Element Plus + Pinia + SCSS |
 | Git 能力 | 子进程调用系统 git CLI，**禁止引入 git2/libgit2** |
 | Windows 右键 | COM Shell Extension DLL（Rust cdylib，动态显示分支名，Win11 走"显示更多选项"经典菜单） |
-| macOS 右键 | FinderSync 扩展（Swift `.appex`，CLI 参数交接，DMG） |
+| macOS 右键 | FinderSync 扩展（Swift `.appex`，`menugit://` 深链交接，DMG） |
 | Linux 右键 | python3-nautilus 扩展（Nautilus 46 新签名 `get_file_items(self, files)`） |
-| 扩展 ↔ GUI | CLI 参数拉起：`menugit <command> --path <dir> [--file <p>] [--url <u>]`；分支名由扩展直接解析 `.git/HEAD`（不 spawn git） |
+| 扩展 ↔ GUI | macOS 用 `menugit://<command>?path=…&file=…` 深链（沙盒会丢弃 argv）；Windows/Linux 用 `menugit <command> --path <dir> [--file <p>] [--url <u>]`。分支名由扩展直接解析 `.git/HEAD`（不 spawn git） |
 | 单实例 | tauri-plugin-single-instance，二次拉起参数转发给现有实例 |
+| HTTPS 凭据 | 应用内一次性配置，经 `git credential approve` 存入 macOS 钥匙串；网络命令只追加系统自带 osxkeychain helper 读取，令牌不进入命令行与诊断日志 |
 | 平台基线 | Windows 10+ / macOS 12+ / **Ubuntu 24.04**（20.04 缺 webkit2gtk-4.1，明确不做兼容，后续如需适配重新开发） |
 | 菜单形态 | 仓库内 7+1 项（提交/拉取/推送/分支/日志/放弃修改/解决冲突 + 设置），非仓库 2+1 项，一级菜单标题括号内显示当前分支名 |
 
@@ -67,7 +68,7 @@ npm run tauri dev
 | M3 Windows COM DLL | ⏸ 后续环节 | 本轮明确不处理 Windows |
 | M4 Ubuntu Nautilus | ⏸ 后续环节 | 本轮明确不处理 Linux |
 | M5 macOS FinderSync + DMG | ✅ 本地安装与加载通过 | 修正 Mach-O executable 入口和沙盒；应用已更新到 `/Applications`，系统注册、启用、实际后台加载与 DMG 校验通过 |
-| macOS P0 操作流程 | ✅ 完成并通过后台验收 | 提交、拉取、推送、分支、日志、放弃修改、冲突、初始化/克隆、设置均连接真实 Tauri 命令；17 项 Rust 测试与 19 项 Finder 菜单测试通过 |
+| macOS P0 操作流程 | ✅ 完成并通过后台验收 | 提交、拉取、推送、分支、日志、放弃修改、冲突、初始化/克隆、设置均连接真实 Tauri 命令；24 项 Rust 测试与 19 项 Finder 菜单测试通过 |
 | macOS Finder 手工验收 / Developer ID 公证 | ⏳ 外部条件 | 真实右键点击拉起窗口仍需前台人工确认；正式分发还需 Developer ID Application 与公证凭据 |
 
 ## 5. 当前代码状态明细
@@ -173,6 +174,19 @@ MenuGit/
 - 新增 3 项 Rust URL 解析测试（中文/空格/`+`、非法 scheme/命令、空值与未知参数），Swift 测试改为校验深链构造；17 项 Rust、19 项 Finder 测试全部通过。
 
 验收：使用与 Finder 扩展同权限的 App Sandbox 辅助程序发起真实深链调用。冷启动（应用未运行）直接进入提交页并选中 `.gitignore` 显示差异；已运行时切换到日志视图正常；随后无参数二次启动保持日志视图，未回到空仓库页。安装包已重建、签名、安装并修复扩展注册，`check-macos-bundle` 新增 `menugit` URL scheme 断言。
+
+### 5.9 2026-10-20 HTTPS 推送凭据配置
+
+现象：macOS 推送 HTTPS 远端时报 `fatal: could not read Username for 'https://github.com': terminal prompts disabled`。应用以 `GIT_TERMINAL_PROMPT=0` 运行，系统原本没有保存 GitHub 凭据，git 无法弹出终端提示，因此每次推送都会失败。
+
+修复：
+
+- 推送 / 拉取出现 `AuthRejected` 时显示“配置 HTTPS 凭据”按钮。弹窗读取 origin 的 HTTPS host，填写用户名与 GitHub Personal Access Token（GitHub 已不接受账户密码），保存后自动重试。
+- 凭据经 stdin 调用 `git credential approve` 写入 macOS 钥匙串；写入前先清空 helper 链，避免全局 `store` 等助手同时收到明文令牌。写入后回读校验，失败会明确提示。
+- push / pull / clone 的网络命令追加系统自带 osxkeychain helper 读取凭据，不修改用户全局 git 配置；令牌不进入命令行、URL、仓库文件或诊断日志。
+- 新增 6 项 Rust 测试：HTTPS 远端解析（用户信息 / 端口 / 令牌前缀）、非 HTTPS 拒绝、凭据注入防护、store helper 往返、仓库 origin 读取、认证错误分类。
+
+验收：24 项 Rust 测试通过；使用假主机完成 osxkeychain 写入、读取、删除探针；验证清空 helper 链后全局 `store` 不会收到凭据。包含该功能的构建已安装到 `/Applications/MenuGit.app`，Finder 扩展注册与加载复检通过，DMG 重新生成。真实 GitHub 推送需要用户用自己的 PAT 在前台完成一次，仓库与测试代码不持有任何账户凭据。
 
 
 

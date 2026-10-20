@@ -46,6 +46,7 @@ import {
 } from "../api";
 import { parseDiff } from "../stores/commit";
 import type { ViewName } from "../stores/session";
+import GitCredentialDialog from "../components/GitCredentialDialog.vue";
 
 type OperationView = Exclude<ViewName, "commit" | "push">;
 const props = defineProps<{
@@ -60,6 +61,7 @@ const emit = defineEmits<{ navigate: [view: ViewName] }>();
 const loading = ref(false);
 const running = ref(false);
 const error = ref<GitErrorPayload | null>(null);
+const credentialOpen = ref(false);
 const notice = ref("");
 const repoInfo = ref<RepoInfo | null>(null);
 const statuses = ref<StatusFile[]>([]);
@@ -642,6 +644,10 @@ async function startClone() {
     fail(reason);
   }
 }
+function retryAfterCredential() {
+  credentialOpen.value = false;
+  if (props.view === "pull") void runPull();
+}
 async function stopClone() {
   if (!cloneKey.value || !running.value) return;
   try {
@@ -725,6 +731,7 @@ onBeforeUnmount(() => {
           <pre>{{ error.stderr }}</pre>
         </details>
         <p v-if="error.kind === 'GitMissing'" class="git-help">macOS 安装 Git：在终端执行 <code>xcode-select --install</code>，或使用 Homebrew 执行 <code>brew install git</code>。</p>
+        <el-button v-if="props.view === 'pull' && error.kind === 'AuthRejected'" size="small" type="primary" @click="credentialOpen = true">配置 HTTPS 凭据</el-button>
         <el-button v-if="props.view === 'pull'" size="small" @click="runPull">重试</el-button>
       </template>
     </el-alert>
@@ -937,8 +944,9 @@ git config --global user.email "you@example.com"</pre>
         <p>Git：{{ diagnostics.gitVersion ?? "未检测到 Git" }}</p><p>日志：{{ diagnostics.logPath ?? "不可用" }}</p><pre>{{ diagnostics.log }}</pre>
       </div>
       <el-divider />
-      <div class="about"><b>MenuGit 0.1.0</b><span>Git 配置、代理与凭证沿用系统 Git；如需修改身份，请在系统 Git 配置中设置 user.name / user.email。</span><span>诊断日志会隐藏 URL authority 和敏感查询参数中的凭证，但可能包含仓库路径；分享前请先检查。</span><span>Finder 扩展启用位置：系统设置 → 通用 → 登录项与扩展 → Finder 扩展。</span><el-button link type="primary" @click="showProjectReleases">查看项目主页与版本更新</el-button></div>
+      <div class="about"><b>MenuGit 0.1.0</b><span>Git 身份与代理沿用系统 Git；HTTPS 凭据保存在 macOS 钥匙串，可在推送或拉取认证失败时配置一次。如需修改提交身份，请在系统 Git 配置中设置 user.name / user.email。</span><span>诊断日志会隐藏 URL authority 和敏感查询参数中的凭证，但可能包含仓库路径；分享前请先检查。</span><span>Finder 扩展启用位置：系统设置 → 通用 → 登录项与扩展 → Finder 扩展。</span><el-button link type="primary" @click="showProjectReleases">查看项目主页与版本更新</el-button></div>
     </section>
+    <GitCredentialDialog v-model="credentialOpen" :path="path" @saved="retryAfterCredential" />
   </main>
 </template>
 
