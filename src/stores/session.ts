@@ -52,7 +52,11 @@ export function parseCliArgs(args: string[]): CliRequest {
 export const useSessionStore = defineStore("session", {
   state: () => ({
     request: { view: "commit" } as CliRequest,
-    tauriReady: false
+    tauriReady: false,
+    ready: false,
+    pushFromCommit: false,
+    requestId: 0,
+    afterCommit: false
   }),
   getters: {
     view: (state) => state.request.view
@@ -62,15 +66,64 @@ export const useSessionStore = defineStore("session", {
       // 浏览器直接打开（无 Tauri 环境）时保持默认提交视图，方便纯前端调试
       if (!("__TAURI_INTERNALS__" in window)) {
         this.tauriReady = false;
+        this.ready = true;
         return;
       }
       this.tauriReady = true;
-      const args = await invoke<string[]>("get_cli_args");
-      this.request = parseCliArgs(args);
-      await listen("cli-args", async () => {
-        const next = await invoke<string[]>("get_cli_args");
-        this.request = parseCliArgs(next);
-      });
+      try {
+        // 先订阅，使用事件携带的参数，避免启动/重复右键时漏掉请求或读取旧参数。
+        await listen<string[]>("cli-args", (event) => {
+          // 普通二次启动（Dock / 访达打开应用）没有请求参数，不能清空当前仓库。
+          if (event.payload.length === 0) return;
+          this.request = parseCliArgs(event.payload);
+          this.requestId += 1;
+          this.pushFromCommit = false;
+          this.afterCommit = false;
+        });
+        const before = this.requestId;
+        const args = await invoke<string[]>("get_cli_args");
+        if (args.length > 0 && before === this.requestId) this.request = parseCliArgs(args);
+        this.pushFromCommit = false;
+      } catch {
+        // 读取失败时保留默认视图，避免把已收到的请求覆盖成空仓库。
+      } finally {
+        this.ready = true;
+      }
+    },
+    setView(view: ViewName) {
+      this.request = { ...this.request, view };
+      if (view !== "push") this.pushFromCommit = false;
+    },
+    openPushFromCommit() {
+      this.pushFromCommit = true;
+      this.afterCommit = false;
+      this.request = { ...this.request, view: "push" };
+    },
+    openPushAfterCommit() {
+      this.openPushFromCommit();
+      this.afterCommit = true;
+    },
+    openWorkspace(path: string, view: ViewName = "commit") {
+      this.request = { view, path };
+      this.requestId += 1;
+      this.pushFromCommit = false;
+      this.afterCommit = false;
+    },
+    chooseWorkspace() {
+      this.request = { view: "commit" };
+      this.requestId += 1;
+    },
+    async closeWindow() {
+      if (!this.tauriReady) {
+        this.request = { ...this.request, view: "commit" };
+        return;
+      }
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        await getCurrentWindow().close();
+      } catch {
+        this.request = { ...this.request, view: "commit" };
+      }
     }
   }
 });

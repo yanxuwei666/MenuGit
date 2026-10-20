@@ -8,16 +8,16 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 #[cfg(windows)]
-use std::os::windows::process::CommandExt;
-#[cfg(windows)]
 use std::io::Write;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 /// Windows 下隐藏子进程控制台窗口
 #[cfg(windows)]
@@ -60,7 +60,11 @@ pub struct GitError {
 
 impl GitError {
     pub fn new(kind: GitErrorKind, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into(), stderr: String::new() }
+        Self {
+            kind,
+            message: message.into(),
+            stderr: String::new(),
+        }
     }
 
     /// 附带原始 stderr 输出
@@ -121,12 +125,20 @@ pub struct RunOptions {
 impl RunOptions {
     /// 本地操作（status/diff/log 等），默认 120 秒超时
     pub fn local(cwd: impl Into<PathBuf>) -> Self {
-        RunOptions { cwd: cwd.into(), timeout: Some(Duration::from_secs(120)), ..Default::default() }
+        RunOptions {
+            cwd: cwd.into(),
+            timeout: Some(Duration::from_secs(120)),
+            ..Default::default()
+        }
     }
 
     /// 网络操作（push/pull），默认 600 秒超时
     pub fn net(cwd: impl Into<PathBuf>) -> Self {
-        RunOptions { cwd: cwd.into(), timeout: Some(Duration::from_secs(600)), ..Default::default() }
+        RunOptions {
+            cwd: cwd.into(),
+            timeout: Some(Duration::from_secs(600)),
+            ..Default::default()
+        }
     }
 }
 
@@ -159,7 +171,11 @@ fn find_git() -> Option<PathBuf> {
     }
     #[cfg(not(windows))]
     {
-        for candidate in ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"] {
+        for candidate in [
+            "/usr/bin/git",
+            "/usr/local/bin/git",
+            "/opt/homebrew/bin/git",
+        ] {
             let p = PathBuf::from(candidate);
             if p.is_file() {
                 return Some(p);
@@ -242,7 +258,10 @@ fn cancels() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
 /// 注册一个取消标记（长操作开始时调用）
 pub fn register_cancel(key: &str) -> Arc<AtomicBool> {
     let flag = Arc::new(AtomicBool::new(false));
-    cancels().lock().unwrap().insert(key.to_string(), flag.clone());
+    cancels()
+        .lock()
+        .unwrap()
+        .insert(key.to_string(), flag.clone());
     flag
 }
 
@@ -273,7 +292,10 @@ fn classify_failure(stderr: &str) -> GitError {
         || s.contains("permission denied (publickey)")
         || s.contains("terminal prompts disabled")
     {
-        GitError::new(GitErrorKind::AuthRejected, "认证失败：请检查凭证或 SSH 配置")
+        GitError::new(
+            GitErrorKind::AuthRejected,
+            "认证失败：请检查凭证或 SSH 配置",
+        )
     } else if s.contains("could not resolve host")
         || s.contains("failed to connect")
         || s.contains("connection timed out")
@@ -281,10 +303,15 @@ fn classify_failure(stderr: &str) -> GitError {
         || s.contains("unable to access")
     {
         GitError::new(GitErrorKind::Network, "网络错误：无法连接远端仓库")
-    } else if (s.contains("rejected") && s.contains("fetch first")) || s.contains("non-fast-forward") {
+    } else if (s.contains("rejected") && s.contains("fetch first"))
+        || s.contains("non-fast-forward")
+    {
         GitError::new(GitErrorKind::Other, "推送被拒绝：远端有新提交，请先拉取")
     } else if s.contains("would be overwritten by") || s.contains("please commit your changes") {
-        GitError::new(GitErrorKind::Other, "存在会被覆盖的本地修改，请先提交或放弃修改")
+        GitError::new(
+            GitErrorKind::Other,
+            "存在会被覆盖的本地修改，请先提交或放弃修改",
+        )
     } else {
         GitError::new(GitErrorKind::Other, "git 命令执行失败")
     };
@@ -346,7 +373,10 @@ pub fn run(args: &[&str], opts: &RunOptions) -> Result<GitOutput, GitError> {
     }
 
     // stdout 直接整块读取；stderr 走逐行回调（进度输出）
-    let stdout_handle = child.stdout.take().map(|r| std::thread::spawn(move || drain_pipe(r)));
+    let stdout_handle = child
+        .stdout
+        .take()
+        .map(|r| std::thread::spawn(move || drain_pipe(r)));
     let err_cb = opts.on_stderr_text.clone();
     let stderr_handle = child.stderr.take().map(|r| {
         std::thread::spawn(move || {
@@ -412,12 +442,21 @@ pub fn run(args: &[&str], opts: &RunOptions) -> Result<GitOutput, GitError> {
     } else {
         let code = finished.and_then(|s| s.code()).unwrap_or(-1);
         if code == 0 || opts.accept_exit_codes.contains(&code) {
-            Ok(GitOutput { stdout, stderr, code })
+            Ok(GitOutput {
+                stdout,
+                stderr,
+                code,
+            })
         } else {
             Err(classify_failure(&stderr))
         }
     };
 
-    crate::diag::log_git(args, &opts.cwd, result.as_ref().ok().map(|o| o.code), elapsed);
+    crate::diag::log_git(
+        args,
+        &opts.cwd,
+        result.as_ref().ok().map(|o| o.code),
+        elapsed,
+    );
     result
 }

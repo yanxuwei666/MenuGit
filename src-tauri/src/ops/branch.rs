@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::git::{self, GitError};
-use crate::ops::{repo_root, with_write_lock};
+use crate::ops::{repo_root, validate_branch_name, with_write_lock};
 
 /// 分支条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,8 +33,14 @@ pub struct BranchList {
 pub fn list_branches(path: String) -> Result<BranchList, GitError> {
     let root = repo_root(&path)?;
     let format = "%(refname:short)%09%(HEAD)%09%(upstream:short)";
-    let local_out = git::run(&["branch", "--format", format], &git::RunOptions::local(&root))?;
-    let remote_out = git::run(&["branch", "-r", "--format", format], &git::RunOptions::local(&root))?;
+    let local_out = git::run(
+        &["branch", "--format", format],
+        &git::RunOptions::local(&root),
+    )?;
+    let remote_out = git::run(
+        &["branch", "-r", "--format", format],
+        &git::RunOptions::local(&root),
+    )?;
 
     let mut current = None;
     let mut local = Vec::new();
@@ -73,13 +79,25 @@ pub fn list_branches(path: String) -> Result<BranchList, GitError> {
             upstream: None,
         });
     }
-    Ok(BranchList { current, local, remote })
+    // 当前分支置顶，其余按名称排序（PRD FM-05：当前分支置顶并标记）。
+    local.sort_by(|a, b| {
+        b.is_current
+            .cmp(&a.is_current)
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    remote.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(BranchList {
+        current,
+        local,
+        remote,
+    })
 }
 
 /// 切换分支：`git switch <branch>`；create=true 时 `git switch -c <branch>`。
 /// 会覆盖未提交修改时 git 报错，原样透传给前端。
 #[tauri::command]
 pub fn switch_branch(path: String, branch: String, create: Option<bool>) -> Result<(), GitError> {
+    validate_branch_name(&branch)?;
     with_write_lock(&path, false, |root| {
         if create.unwrap_or(false) {
             git::run(&["switch", "-c", &branch], &git::RunOptions::local(root))?;
@@ -93,8 +111,15 @@ pub fn switch_branch(path: String, branch: String, create: Option<bool>) -> Resu
 /// 检出远端分支：`git switch -t <remoteBranch>`（如 origin/feature）
 #[tauri::command]
 pub fn checkout_remote(path: String, remote_branch: String) -> Result<(), GitError> {
+    if remote_branch.starts_with('-') || remote_branch.trim().is_empty() {
+        return Err(GitError::other("远端分支名无效"));
+    }
     with_write_lock(&path, false, |root| {
-        git::run(&["switch", "-t", &remote_branch], &git::RunOptions::local(root))?;
+        git::run(
+            &["switch", "-t", &remote_branch],
+            &git::RunOptions::local(root),
+        )?;
         Ok(())
     })
 }
+

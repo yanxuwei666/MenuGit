@@ -1,11 +1,9 @@
 //! diff.rs —— 单文件差异命令。
 
-use std::path::Path;
-
 use serde::{Deserialize, Serialize};
 
 use crate::git::{self, GitError};
-use crate::ops::repo_root;
+use crate::ops::{literal_pathspec, repo_root, validate_relative_path};
 use crate::repo;
 
 /// 单文件 diff 结果
@@ -24,9 +22,7 @@ pub struct DiffResult {
 #[tauri::command]
 pub fn get_diff(path: String, file: String, staged: Option<bool>) -> Result<DiffResult, GitError> {
     let root = repo_root(&path)?;
-    if Path::new(&file).is_absolute() {
-        return Err(GitError::other("file 必须是仓库内相对路径"));
-    }
+    validate_relative_path(&file)?;
     let staged = staged.unwrap_or(false);
 
     let status = repo::collect_status(&root)?;
@@ -46,10 +42,18 @@ pub fn get_diff(path: String, file: String, staged: Option<bool>) -> Result<Diff
         });
     }
 
+    let file_spec = literal_pathspec(&file);
+
     let out = if staged {
-        git::run(&["diff", "--no-color", "--cached", "--", &file], &git::RunOptions::local(&root))?
+        git::run(
+            &["diff", "--no-color", "--cached", "--", &file_spec],
+            &git::RunOptions::local(&root),
+        )?
     } else {
-        git::run(&["diff", "--no-color", "--", &file], &git::RunOptions::local(&root))?
+        git::run(
+            &["diff", "--no-color", "--", &file_spec],
+            &git::RunOptions::local(&root),
+        )?
     };
     Ok(DiffResult {
         is_binary: out.stdout.contains("Binary files "),

@@ -1,11 +1,35 @@
 //! status.rs —— 仓库信息与工作区状态命令。
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
 use crate::git::{self, GitError};
 use crate::ops::{repo_root, validate_dir};
 use crate::repo::{self, RepoInfo, StatusFile};
+
+/// 系统 Git 当前提交身份（只读 user.name / user.email，不修改 Git 配置）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorIdentity {
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
+
+#[tauri::command]
+pub fn get_author_identity(path: String) -> Result<AuthorIdentity, GitError> {
+    let root = repo_root(&path)?;
+    let read_config = |key: &str| {
+        git::run(&["config", "--get", key], &git::RunOptions::local(&root))
+            .ok()
+            .map(|out| out.stdout.trim().to_string())
+            .filter(|value| !value.is_empty())
+    };
+    Ok(AuthorIdentity {
+        name: read_config("user.name"),
+        email: read_config("user.email"),
+    })
+}
 
 /// 仓库概要：根目录 / 是否仓库 / 分支 / 上游 / 领先落后 / 合并冲突状态。
 /// 目录不是仓库时返回 `isRepo: false` 而非报错，便于前端切换初始化/克隆视图。
@@ -60,7 +84,9 @@ pub fn get_status(path: String) -> Result<Vec<StatusFile>, GitError> {
             added,
             deleted,
             binary,
-            staged: !entry.untracked && !entry.unmerged && entry.xy.as_bytes().first() != Some(&b'.'),
+            staged: !entry.untracked
+                && !entry.unmerged
+                && entry.xy.as_bytes().first() != Some(&b'.'),
             untracked: entry.untracked,
         });
     }
@@ -73,7 +99,10 @@ fn numstat_map(
     cached: bool,
 ) -> Result<HashMap<String, (Option<u64>, Option<u64>, bool)>, GitError> {
     let out = if cached {
-        git::run(&["diff", "--cached", "--numstat", "-z"], &git::RunOptions::local(root))?
+        git::run(
+            &["diff", "--cached", "--numstat", "-z"],
+            &git::RunOptions::local(root),
+        )?
     } else {
         git::run(&["diff", "--numstat", "-z"], &git::RunOptions::local(root))?
     };

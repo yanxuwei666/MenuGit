@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:macos": "node scripts/build-macos-release.mjs",
+    "test:findersync": "node scripts/test-findersync.mjs",
+    "test:findersync:installed": "node scripts/test-installed-findersync.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",

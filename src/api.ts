@@ -109,6 +109,12 @@ export interface CommitResult {
   hash: string;
 }
 
+/** 当前系统 Git 配置的提交身份；未配置时字段为 null */
+export interface AuthorIdentity {
+  name: string | null;
+  email: string | null;
+}
+
 /** 拉取结果摘要 */
 export interface PullResult {
   /** 拉入的提交数（解析失败为 null） */
@@ -141,6 +147,17 @@ export interface LogEntry {
   author: string;
   time: number;
   refs: string[];
+}
+
+export interface LogDetail {
+  message: string;
+  files: LogFile[];
+}
+
+export interface LogFile {
+  status: string;
+  path: string;
+  oldPath: string | null;
 }
 
 /** 冲突块三选一 */
@@ -196,7 +213,24 @@ export interface CloneProgress {
 
 /** 应用设置 */
 export interface AppSettings {
+  language: "system" | "zh-CN" | "en";
+  newFilesChecked: boolean;
   diagEnabled: boolean;
+}
+
+export interface Diagnostics {
+  gitVersion: string | null;
+  logPath: string | null;
+  log: string;
+}
+
+export interface FinderIntegration {
+  supported: boolean;
+  bundled: boolean;
+  registered: boolean;
+  enabled: boolean;
+  extensionPath: string | null;
+  message: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,8 +252,12 @@ export const stageFiles = (path: string, files: string[]) =>
   call<void>("stage_files", { path, files });
 
 /** 提交（信息经 stdin 走 git commit -F -），返回新提交 hash */
-export const commit = (path: string, message: string) =>
-  call<CommitResult>("commit", { path, message });
+export const commit = (path: string, message: string, files: string[]) =>
+  call<CommitResult>("commit", { path, message, files });
+
+/** 读取系统 Git 当前提交身份 */
+export const getAuthorIdentity = (path: string) =>
+  call<AuthorIdentity>("get_author_identity", { path });
 
 /** 推送：git push [-u] origin <branch>；branch 缺省为当前分支 */
 export const push = (path: string, branch?: string, setUpstream?: boolean) =>
@@ -253,6 +291,14 @@ export const getLog = (
     limit: opts?.limit
   });
 
+/** 读取提交完整说明与涉及文件 */
+export const getLogDetail = (path: string, hash: string) =>
+  call<LogDetail>("get_log_detail", { path, hash });
+
+/** 读取提交与父提交之间的单文件差异 */
+export const getCommitFileDiff = (path: string, hash: string, file: string) =>
+  call<string>("get_commit_file_diff", { path, hash, file });
+
 /** 放弃修改：已跟踪 git restore --，未跟踪 git clean -f --（调用方负责二次确认） */
 export const discardChanges = (path: string, files: string[]) =>
   call<void>("discard_changes", { path, files });
@@ -282,12 +328,26 @@ export const cloneRepo = (path: string, url: string, dir?: string) =>
 /** 取消克隆（终止整个 git 进程树） */
 export const cancelClone = (repoKey: string) => call<void>("cancel_clone", { repoKey });
 
+/** 在 Finder 中定位克隆完成的目录（macOS） */
+export const openInFinder = (path: string) => call<void>("open_in_finder", { path });
+
 /** 读取应用设置 */
 export const getSettings = () => call<AppSettings>("get_settings");
+export const chooseRepository = () => call<string | null>("choose_repository");
 
 /** 保存应用设置（同步诊断日志开关） */
 export const setSettings = (settings: AppSettings) =>
   call<void>("set_settings", { settings });
+
+/** 读取诊断日志与 Git 版本 */
+export const getDiagnostics = () => call<Diagnostics>("get_diagnostics");
+
+/** 检查和修复 Finder 扩展，不启动访达或应用窗口 */
+export const getFinderIntegration = () => call<FinderIntegration>("get_finder_integration");
+export const repairFinderIntegration = () => call<FinderIntegration>("repair_finder_integration");
+
+/** 在系统浏览器打开项目发布页 */
+export const openProjectReleases = () => call<void>("open_project_releases");
 
 /** 订阅克隆进度事件；返回取消监听函数 */
 export function listenCloneProgress(

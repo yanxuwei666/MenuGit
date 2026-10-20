@@ -1,12 +1,13 @@
 //! settings.rs —— 薄设置持久化（技术方案 §3.1）。
 //!
 //! 设置存于 Tauri app data 目录的 `settings.json`，不含任何 git config 项。
-//! 当前仅诊断日志开关；语言等字段后续在 M6 扩展。
+//! 仅保存 MenuGit 自身偏好，不包含任何 git config 项。
 
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
+use tauri_plugin_dialog::DialogExt;
 
 use crate::diag;
 
@@ -14,18 +15,29 @@ use crate::diag;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
+    /// 界面语言：system / zh-CN / en
+    pub language: String,
+    /// 新增 / 未跟踪文件是否默认勾选提交
+    pub new_files_checked: bool,
     /// 诊断日志开关（R6，默认关闭）
     pub diag_enabled: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { diag_enabled: false }
+        Self {
+            language: "system".to_string(),
+            new_files_checked: false,
+            diag_enabled: false,
+        }
     }
 }
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|dir| dir.join("settings.json"))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|dir| dir.join("settings.json"))
 }
 
 /// 读取设置；文件缺失或损坏时返回默认值
@@ -60,7 +72,84 @@ pub fn get_settings(app: AppHandle) -> Settings {
 /// 保存应用设置，并同步诊断日志开关
 #[tauri::command]
 pub fn set_settings(app: AppHandle, settings: Settings) -> Result<(), String> {
-    save(&app, &settings)?;
-    diag::set_enabled(settings.diag_enabled);
+    let mut normalized = settings;
+    if !matches!(normalized.language.as_str(), "system" | "zh-CN" | "en") {
+        normalized.language = "system".to_string();
+    }
+    save(&app, &normalized)?;
+    diag::set_enabled(normalized.diag_enabled);
     Ok(())
+}
+
+/// 读取诊断日志与 Git 版本，供设置页排障。
+#[tauri::command]
+pub fn get_diagnostics(app: AppHandle) -> Diagnostics {
+    let log_path = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|dir| dir.join("diag.log"));
+    let log = log_path
+        .as_ref()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .unwrap_or_else(|| "暂无诊断日志".to_string());
+    let git_version = crate::git::resolve_git_binary()
+        .ok()
+        .and_then(|git| {
+            std::process::Command::new(git)
+                .arg("--version")
+                .output()
+                .ok()
+        })
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+    Diagnostics {
+        git_version,
+        log_path: log_path.map(|path| path.to_string_lossy().into_owned()),
+        log,
+    }
+}
+
+/// 在系统浏览器打开项目发布页，供用户查看新版本与项目说明。
+#[tauri::command]
+pub fn open_project_releases() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("/usr/bin/open")
+            .arg("https://github.com/yanxuwei666/MenuGit/releases")
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("无法打开项目发布页：{error}"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("此操作目前仅支持 macOS".to_string())
+    }
+}
+
+/// 用户点击时打开系统目录选择器；后台检查通过输入路径跳过原生对话框。
+#[tauri::command]
+pub async fn choose_repository(app: AppHandle) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("选择 Git 仓库目录")
+            .blocking_pick_folder()
+            .map(|path| {
+                path.into_path()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .map_err(|error| error.to_string())
+            })
+            .transpose()
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Diagnostics {
+    pub git_version: Option<String>,
+    pub log_path: Option<String>,
+    pub log: String,
 }

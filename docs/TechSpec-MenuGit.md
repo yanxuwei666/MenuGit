@@ -62,7 +62,7 @@ MenuGit/
 ├─ src-tauri/                # Rust 核心（Tauri 命令、git 执行层、仓库发现、锁）
 ├─ extensions/
 │  ├─ windows/               # COM Shell Extension DLL（Rust cdylib）
-│  ├─ macos/                 # FinderSync 扩展（Swift，独立 Xcode/SwiftPM 工程）
+│  ├─ macos/                 # FinderSync 扩展（Swift，打包为 .appex）
 │  └─ linux/                 # python3-nautilus 扩展脚本（随 deb 分发）
 ├─ docs/                     # PRD、技术方案、原型
 └─ .github/workflows/        # 三平台 CI 构建
@@ -90,7 +90,7 @@ MenuGit/
 | --- | --- |
 | 状态与分支信息 | `git status --porcelain=v2 --branch -z`（勾选/冲突/领先落后一并解析） |
 | 差异预览 | 已跟踪：`git diff --no-color [--cached] -- <file>`；未跟踪：`git diff --no-color --no-index /dev/null <file>` |
-| 暂存勾选 | 修改/删除/未跟踪统一 `git add -A -- <paths>`；提交 `git commit -F -`（信息走 stdin，避免转义问题） |
+| 暂存勾选 | 修改/删除/未跟踪统一 `git add -A -- <paths>`；提交 `git commit --only -F - -- <paths>`（信息走 stdin，避免转义问题，并确保未勾选但已暂存的文件不会混入本次提交） |
 | 推送 | `git push origin <branch>`；新建远端分支 `git push -u origin <branch>` |
 | 拉取 | `git pull`（遵循系统 pull 策略，不干预）；无上游时 `git pull origin <b>` 并记住上游 |
 | 分支 | 列表 `git branch --format=...` / `git branch -r`；切换 `git switch`；新建 `git switch -c`；检出远端 `git switch -t origin/<b>` |
@@ -137,10 +137,14 @@ MenuGit/
 
 ### 5.2 macOS：FinderSync 扩展（extensions/macos）
 
-- Swift 实现 `FIFinderSync`，嵌入主 App 的 `PlugIns/<app>.appex`；与主程序同 App Group。
-- `menu(for:)` 每次右键动态构建："MenuGit (main)" 一级项 + 子菜单（同 PRD 形态）；分支读取同样直接解析目标目录的 `.git/HEAD`。
-- 点击动作：`/usr/bin/open -a MenuGit --args <command> --path <dir>` 拉起主程序（单实例机制承接）。
-- 分发：Developer ID 签名 + 公证（需 Apple Developer Program，$99/年），DMG 拖拽安装（PRD Q2 假设成立）；安装完成页引导用户到 系统设置 → 扩展 → 已添加的扩展 中启用 MenuGit（FinderSync 无法被安装器自动启用）。
+- Swift 实现 `FIFinderSync`，以 `NSExtensionMain` 为入口编译成 Mach-O **executable**，打包为 `MenuGitFinderSync.appex` 并嵌入主 App 的 `Contents/PlugIns/`；不可编译为动态 bundle。编译目标和 plist 均明确 macOS 12.0。
+- 扩展启用 App Sandbox，并只读访问用户目录、挂载卷和测试临时目录。监控 `getpwuid` 返回的真实账户主目录及 APFS Data 别名、`/Volumes`、`/private/tmp`，不使用沙盒内指向扩展容器的 `NSHomeDirectory()`；控制器在 `super.init()` 后获取。
+- `menu(for:)` 每次右键动态构建仓库菜单或入口菜单；分支名直接解析 `.git/HEAD`，支持 `.git` 文件指向的 worktree 元数据，不在 Finder 扩展内运行 Git 子进程。
+- 菜单动作 selector 由扩展主对象接收，系统菜单通过 `tag` 对应扩展内缓存的路径，避免跨进程传输自定义 `representedObject`。点击后通过 `NSWorkspace.openApplication` 向主程序传递 `<command> --path <dir> [--file <p>]` 参数；单实例机制承接重复拉起。
+- `npm run tauri:macos` 在 macOS 本机编译前端和 FinderSync，再生成 `.app`、签名校验和拖拽式 DMG。DMG 由 `hdiutil create` 无界面生成，不运行默认 DMG 脚本的 Finder AppleScript。
+- 扩展与应用分别从内向外签名，保留扩展的沙盒 entitlements；本地无 Apple 签名身份时使用 ad-hoc 签名。正式分发需要 `APPLE_SIGNING_IDENTITY` Developer ID Application、Apple 公证凭据和公证流程。
+- 主应用启动时后台注册随包扩展，保留用户的启用/禁用选择；设置页提供状态与“修复访达右键菜单”按钮，按用户操作调用 `pluginkit` 注册并启用。无窗口 CLI `--finder-extension-status` / `--repair-finder-extension` 用于后台排障。
+- `npm run test:findersync` 在真实沙盒中测试菜单和仓库路径，并通过系统框架验证菜单序列化和原始动作分派（应用启动器替身保证后台测试）。打包脚本检查 Mach-O 入口、最低版本、沙盒签名和无窗口 CLI。安装后的 `node scripts/check-macos-bundle.mjs /Applications/MenuGit.app --installed` 要求系统已注册、已启用且 Finder 已实际启动扩展进程；`test:findersync:installed -- ... --observed-path <已打开的目录>` 进一步要求 Finder 实际观察到该目录，匹配路径指纹。
 
 ### 5.3 Ubuntu：python3-nautilus 扩展（extensions/linux）
 

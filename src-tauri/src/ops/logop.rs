@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::git::{self, GitError};
-use crate::ops::repo_root;
+use crate::ops::{literal_pathspec, repo_root, validate_relative_path};
 
 /// 提交日志条目。time 为 epoch 秒，展示格式（相对时间等）由前端决定。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +17,29 @@ pub struct LogEntry {
     pub time: i64,
     /// 装饰器（如 ["HEAD -> main", "origin/main", "tag: v1"]）
     pub refs: Vec<String>,
+}
+
+/// 日志详情：完整提交信息与该提交涉及的文件。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogDetail {
+    pub message: String,
+    pub files: Vec<LogFile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogFile {
+    pub status: String,
+    pub path: String,
+    pub old_path: Option<String>,
+}
+
+fn validate_hash(hash: &str) -> Result<(), GitError> {
+    if hash.is_empty() || hash.len() > 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(GitError::other("提交编号无效"));
+    }
+    Ok(())
 }
 
 /// 读取提交日志：`git log --format=%H|%h|%s|%an|%at|%D`（分隔符实际用 \x1f，
@@ -36,14 +59,22 @@ pub fn get_log(
     let limit_s = limit.to_string();
     let skip_s = skip.to_string();
     let format = "%H%x1f%h%x1f%s%x1f%an%x1f%at%x1f%D";
+    let format_arg = format!("--format={format}");
 
-    let mut args: Vec<&str> = vec!["log", "--format", format, "--skip", &skip_s, "-n", &limit_s];
+    let file_spec = file
+        .as_deref()
+        .map(|file| {
+            validate_relative_path(file)?;
+            Ok::<String, GitError>(literal_pathspec(file))
+        })
+        .transpose()?;
+    let mut args: Vec<&str> = vec!["log", &format_arg, "--skip", &skip_s, "-n", &limit_s];
     if all.unwrap_or(false) {
         args.push("--all");
     }
-    if let Some(fpath) = file.as_deref() {
+    if let Some(pathspec) = file_spec.as_deref() {
         args.push("--");
-        args.push(fpath);
+        args.push(pathspec);
     }
 
     let out = match git::run(&args, &git::RunOptions::local(&root)) {
@@ -77,4 +108,75 @@ pub fn get_log(
         });
     }
     Ok(entries)
+}
+
+/// 读取完整提交说明与变更文件列表。
+#[tauri::command]
+pub fn get_log_detail(path: String, hash: String) -> Result<LogDetail, GitError> {
+    validate_hash(&hash)?;
+    let root = repo_root(&path)?;
+    let message = git::run(
+        &["show", "-s", "--format=%B", &hash],
+        &git::RunOptions::local(&root),
+    )?
+    .stdout
+    .trim_end()
+    .to_string();
+    let names = git::run(
+        &[
+            "diff-tree",
+            "--root",
+            "--no-commit-id",
+            "--name-status",
+            "-r",
+            "-M",
+            &hash,
+        ],
+        &git::RunOptions::local(&root),
+    )?;
+    let files = names
+        .stdout
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split('\t').collect();
+            let status = fields.first()?.to_string();
+            if status.starts_with('R') && fields.len() >= 3 {
+                Some(LogFile {
+                    status,
+                    old_path: Some(fields[1].to_string()),
+                    path: fields[2].to_string(),
+                })
+            } else if fields.len() >= 2 {
+                Some(LogFile {
+                    status,
+                    path: fields[1].to_string(),
+                    old_path: None,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(LogDetail { message, files })
+}
+
+/// 读取某次提交相对于父提交的单文件差异。
+#[tauri::command]
+pub fn get_commit_file_diff(path: String, hash: String, file: String) -> Result<String, GitError> {
+    validate_hash(&hash)?;
+    validate_relative_path(&file)?;
+    let root = repo_root(&path)?;
+    let file_spec = literal_pathspec(&file);
+    let out = git::run(
+        &[
+            "show",
+            "--no-ext-diff",
+            "--format=",
+            &hash,
+            "--",
+            &file_spec,
+        ],
+        &git::RunOptions::local(&root),
+    )?;
+    Ok(out.stdout)
 }

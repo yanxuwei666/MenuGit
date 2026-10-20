@@ -1,9 +1,33 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { useCommitStore, STATUS_LABEL, fileStat } from "../stores/commit";
 import DiffPreview from "../components/DiffPreview.vue";
 
 const store = useCommitStore();
+const props = defineProps<{
+  path?: string;
+  file?: string;
+  tauriReady: boolean;
+}>();
+const emit = defineEmits<{
+  submitted: [hash: string];
+  openBranch: [];
+  openConflict: [];
+  openPull: [];
+  openLog: [];
+  openPush: [];
+  chooseWorkspace: [];
+  close: [];
+}>();
+
+watch(
+  () => [props.path, props.file, props.tauriReady] as const,
+  ([path, file, tauriReady]) => {
+    if (tauriReady && store.workspacePath === path) void store.refresh(file);
+    else void store.initialize(path, tauriReady, file);
+  },
+  { immediate: true }
+);
 
 // 提交信息首行超长提示（沿用原型：建议不超过 50 字符，不强制）
 const firstLineTooLong = computed(() => store.message.split("\n")[0].length > 50);
@@ -27,6 +51,16 @@ function onKeydown(e: KeyboardEvent) {
     store.setAll(!store.allChecked);
   }
 }
+
+async function submit() {
+  const hash = await store.doCommit();
+  if (hash && props.tauriReady) emit("submitted", hash);
+}
+
+function cancel() {
+  store.resetForm();
+  emit("close");
+}
 </script>
 
 <template>
@@ -34,23 +68,44 @@ function onKeydown(e: KeyboardEvent) {
     <!-- 窗口标题栏 -->
     <div class="mbar">
       <span class="t">提交 · {{ store.repo.name }}</span>
+      <div class="workspace-actions">
+        <el-button size="small" :disabled="store.loading || store.committing" @click="store.refresh(props.file)">刷新</el-button>
+        <el-button size="small" :disabled="store.committing" @click="emit('chooseWorkspace')">选择仓库</el-button>
+      </div>
     </div>
 
     <div class="mbody">
       <!-- 工作区干净：空状态（文案参照原型） -->
-      <div v-if="store.files.length === 0" class="empty">
+      <div v-if="store.loading" class="empty">
+        <div class="big">…</div>
+        正在读取仓库状态…
+      </div>
+      <div v-else-if="store.loadError" class="empty">
+        <div class="big">!</div>
+        {{ store.loadError }}
+        <div class="empty-actions"><el-button @click="store.refresh(props.file)">重试</el-button><el-button @click="emit('chooseWorkspace')">选择仓库</el-button></div>
+      </div>
+      <div v-else-if="store.files.length === 0" class="empty">
         <div class="big">✔</div>
         工作区干净，{{
-          store.repo.ahead > 0
+          !store.repo.upstream
+            ? "尚未设置上游，等待下一次修改"
+            : store.repo.ahead > 0
             ? `领先 ${store.repo.upstream} ${store.repo.ahead} 个提交`
             : `与 ${store.repo.upstream} 同步，等待下一次修改`
         }}
+        <div class="empty-actions">
+          <el-button size="small" @click="emit('openBranch')">分支</el-button>
+          <el-button size="small" @click="emit('openPull')">拉取</el-button>
+          <el-button size="small" @click="emit('openPush')">推送</el-button>
+          <el-button size="small" @click="emit('openLog')">日志</el-button>
+        </div>
       </div>
 
       <template v-else>
         <!-- 顶部状态条：分支徽章 + 与上游的同步描述 -->
         <div class="stat-head">
-          <span class="b-pill">
+          <button class="b-pill" @click="emit('openBranch')" title="切换或创建分支">
             <svg
               viewBox="0 0 16 16"
               width="13"
@@ -66,14 +121,35 @@ function onKeydown(e: KeyboardEvent) {
               <path d="M4 5.1v5.8M12 5.1c0 3-2.2 3.6-4.6 4" />
             </svg>
             {{ store.repo.branch }}
-          </span>
+          </button>
           <span class="ab up">{{ store.syncText }}</span>
+          <el-button
+            v-if="store.repo.ahead > 0 && !store.hasConflict && !store.repo.mergeInProgress"
+            class="push-now"
+            size="small"
+            @click="emit('openPush')"
+          >
+            ↑ 推送
+          </el-button>
         </div>
 
         <!-- 存在冲突文件时顶部提示条 -->
-        <div v-if="store.hasConflict" class="hint-bar red">
-          存在 {{ store.conflictCount }} 个冲突文件，请先解决冲突再提交（冲突文件不可勾选）。
+        <div v-if="store.hasConflict || store.repo.mergeInProgress" class="hint-bar red">
+          <template v-if="store.conflictCount > 0">
+            存在 {{ store.conflictCount }} 个冲突文件，请先解决冲突再提交（冲突文件不可勾选）。
+          </template>
+          <template v-else>合并仍在进行，请完成或中止合并后再提交。</template>
+          <el-button size="small" @click="emit('openConflict')">打开冲突处理</el-button>
         </div>
+
+        <el-alert v-if="store.commitError" class="commit-error" type="error" :title="store.commitError.message" :closable="false" show-icon>
+          <template #default>
+            <details v-if="store.commitError.stderr" class="commit-error-details">
+              <summary>显示 Git / hook 详细信息</summary>
+              <pre>{{ store.commitError.stderr }}</pre>
+            </details>
+          </template>
+        </el-alert>
 
         <!-- 文件名过滤 -->
         <el-input
@@ -103,7 +179,7 @@ function onKeydown(e: KeyboardEvent) {
                 :key="f.name"
                 class="f-li"
                 :class="{ sel: store.selected === f.name }"
-                @click="store.selected = f.name"
+                @click="store.selectFile(f.name)"
               >
                 <el-checkbox
                   v-model="f.checked"
@@ -113,7 +189,7 @@ function onKeydown(e: KeyboardEvent) {
                 <el-tag class="st" :class="'st-' + f.status" size="small" round>
                   {{ STATUS_LABEL[f.status] }}
                 </el-tag>
-                <span class="nm">{{ f.name }}</span>
+                <span class="nm">{{ f.origPath ? `${f.origPath} → ${f.name}` : f.name }}</span>
                 <span class="stat">{{ fileStat(f) }}</span>
               </div>
               <div v-if="store.filteredFiles.length === 0" class="diff-empty">无匹配文件</div>
@@ -139,12 +215,12 @@ function onKeydown(e: KeyboardEvent) {
         <!-- 底部：作者 + 取消 + 提交 -->
         <div class="win-foot">
           <span class="author">作者：{{ store.author }}（来自系统 Git 配置）</span>
-          <el-button class="btn-cancel" @click="store.resetForm">取消</el-button>
+          <el-button class="btn-cancel" @click="cancel">取消</el-button>
           <el-button
             type="primary"
             :disabled="!store.canCommit"
             :loading="store.committing"
-            @click="store.doCommit"
+            @click="submit"
           >
             {{ store.committing ? "提交中…" : store.checkedCount > 0 ? `提交 ${store.checkedCount} 个文件` : "提交" }}
           </el-button>
@@ -160,6 +236,7 @@ function onKeydown(e: KeyboardEvent) {
 </style>
 
 <style scoped lang="scss">
+.workspace-actions { display: flex; gap: 8px; margin-left: auto; }
 .commit-window {
   height: 100%;
   display: flex;
@@ -189,6 +266,25 @@ function onKeydown(e: KeyboardEvent) {
     text-overflow: ellipsis;
   }
 }
+
+.b-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--ink2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.b-pill:hover { border-color: var(--accent); color: var(--accent); }
+.commit-error { margin: 0 0 9px; }
+.commit-error-details { margin-top: 8px; font-size: 11px; }
+.commit-error-details pre { max-height: 140px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.empty-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
 
 .mbody {
   flex: 1;
@@ -228,6 +324,10 @@ function onKeydown(e: KeyboardEvent) {
   &.up {
     color: var(--ok);
   }
+}
+
+.push-now {
+  margin-left: auto;
 }
 
 /* 冲突提示条（沿用原型 .hint-bar.red） */
@@ -371,6 +471,11 @@ function onKeydown(e: KeyboardEvent) {
     --el-tag-bg-color: var(--bad-soft);
     --el-tag-text-color: var(--bad);
     --el-tag-border-color: #efb2aa;
+  }
+  &.st-R {
+    --el-tag-bg-color: var(--accent-soft);
+    --el-tag-text-color: var(--accent);
+    --el-tag-border-color: transparent;
   }
 }
 

@@ -5,8 +5,8 @@
 
 pub mod branch;
 pub mod conflict;
-pub mod discard;
 pub mod diff;
+pub mod discard;
 pub mod initclone;
 pub mod logop;
 pub mod stage;
@@ -15,7 +15,7 @@ pub mod sync;
 
 use std::path::{Path, PathBuf};
 
-use crate::git::GitError;
+use crate::git::{self, GitError};
 use crate::{lock, repo};
 
 /// 校验目录存在，返回路径
@@ -31,6 +31,41 @@ pub fn validate_dir(path: &str) -> Result<PathBuf, GitError> {
 pub fn repo_root(path: &str) -> Result<PathBuf, GitError> {
     let dir = validate_dir(path)?;
     repo::find_repo_root(&dir).ok_or_else(GitError::not_a_repo)
+}
+
+/// 把仓库内相对路径转换成 Git literal pathspec，避免文件名被解释为通配语法。
+pub fn literal_pathspec(path: &str) -> String {
+    format!(":(literal){path}")
+}
+
+/// 校验分支名：交给系统 git 做权威校验，避免自写规则漏项。
+pub fn validate_branch_name(name: &str) -> Result<(), GitError> {
+    if name.is_empty() || name.trim() != name || name.starts_with('-') {
+        return Err(GitError::other("分支名无效：不能为空、包含首尾空格或以 - 开头"));
+    }
+    match git::run(
+        &["check-ref-format", "--branch", name],
+        &git::RunOptions::local(std::env::temp_dir()),
+    ) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(GitError::other("分支名无效：不能包含空格或特殊字符")),
+    }
+}
+
+/// 拒绝绝对路径和向上跳出仓库的相对路径。
+pub fn validate_relative_path(path: &str) -> Result<(), GitError> {
+    let candidate = Path::new(path);
+    if candidate.is_absolute()
+        || candidate.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return Err(GitError::other("文件路径必须位于仓库内"));
+    }
+    Ok(())
 }
 
 /// 写操作统一入口（R3）：

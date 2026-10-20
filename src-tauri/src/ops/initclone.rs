@@ -10,8 +10,8 @@ use tauri::Emitter;
 
 use crate::git::{self, GitError};
 use crate::lock;
-use crate::repo;
 use crate::ops::validate_dir;
+use crate::repo;
 
 use super::status::get_repo_info;
 
@@ -19,8 +19,15 @@ use super::status::get_repo_info;
 #[tauri::command]
 pub fn init_repo(path: String) -> Result<repo::RepoInfo, GitError> {
     let dir = validate_dir(&path)?;
-    // 目标可能尚不是仓库：锁粒度取该目录（或其所在仓库）
-    let lock_target = repo::find_repo_root(&dir).unwrap_or_else(|| dir.clone());
+    // 已在仓库内（含仓库根本身）时不重复初始化，避免创建嵌套 .git（PRD FM-09）。
+    if let Some(existing) = repo::find_repo_root(&dir) {
+        return Err(GitError::other(format!(
+            "此处已在仓库 {} 中，无需重复初始化",
+            existing.display()
+        )));
+    }
+    // 目标尚不是仓库：锁粒度取该目录
+    let lock_target = dir.clone();
     let _guard = lock::acquire(&lock_target)?;
     git::run(&["init"], &git::RunOptions::local(&dir))?;
     drop(_guard);
@@ -69,17 +76,19 @@ pub fn clone_repo(
         Some(d) if !d.is_empty() => d.to_string(),
         _ => repo_name_from_url(&url),
     };
-    if name.is_empty() {
-        return Err(GitError::other("无法从地址推断目录名，请手动指定"));
-    }
+    validate_folder_name(&name).map_err(GitError::other)?;
     let target = parent.join(&name);
     if target.exists() {
-        return Err(GitError::other(format!("目标目录已存在：{}", target.display())));
+        return Err(GitError::other(format!(
+            "目标目录已存在：{}",
+            target.display()
+        )));
     }
 
     // repoKey = 目标目录绝对路径，全局唯一
     let repo_key = target.to_string_lossy().into_owned();
     let target_str = repo_key.clone();
+    let target_for_clone = target_str.clone();
     let cancel = git::register_cancel(&repo_key);
 
     let key_for_thread = repo_key.clone();
@@ -107,7 +116,10 @@ pub fn clone_repo(
             ..Default::default()
         };
 
-        let result = git::run(&["clone", "--progress", &url, &target_str], &opts);
+        let result = git::run(
+            &["clone", "--progress", "--", &url, &target_for_clone],
+            &opts,
+        );
         git::unregister_cancel(&key_for_thread);
 
         let payload = match result {
@@ -131,13 +143,53 @@ pub fn clone_repo(
         let _ = app.emit("clone-progress", payload);
     });
 
-    Ok(CloneStartResult { repo_key, target_dir: target_str })
+    Ok(CloneStartResult {
+        repo_key,
+        target_dir: target_str,
+    })
 }
 
 /// 取消克隆：置位取消标记，执行循环会终止整个 git 进程树
 #[tauri::command]
 pub fn cancel_clone(repo_key: String) -> Result<(), GitError> {
     git::cancel(&repo_key);
+    Ok(())
+}
+
+/// 在 Finder 中显示给定路径（克隆完成后的快捷入口）。
+#[tauri::command]
+pub fn open_in_finder(path: String) -> Result<(), GitError> {
+    let target = validate_dir(&path)?;
+    #[cfg(target_os = "macos")]
+    {
+        let status = std::process::Command::new("/usr/bin/open")
+            .arg("-R")
+            .arg(&target)
+            .status()
+            .map_err(|error| GitError::other(format!("无法打开 Finder：{error}")))?;
+        if !status.success() {
+            return Err(GitError::other("Finder 未能显示克隆目录"));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = target;
+        Err(GitError::other("此操作目前仅支持 macOS Finder"))
+    }
+}
+
+/// 目标文件夹名必须是当前目录下的单个目录名，禁止路径跳转与绝对路径。
+fn validate_folder_name(name: &str) -> Result<(), String> {
+    let candidate = std::path::Path::new(name);
+    let single_normal = candidate.components().count() == 1
+        && matches!(
+            candidate.components().next(),
+            Some(std::path::Component::Normal(_))
+        );
+    if name.trim().is_empty() || name.contains('\0') || candidate.is_absolute() || !single_normal {
+        return Err("目标文件夹名无效：请只填写一个目录名，不要包含路径分隔符".to_string());
+    }
     Ok(())
 }
 

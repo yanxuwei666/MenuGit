@@ -43,15 +43,107 @@ pub fn log_git(args: &[&str], cwd: &Path, code: Option<i32>, elapsed: Duration) 
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
+    let safe_args = args
+        .iter()
+        .map(|arg| redact_url_credentials(arg))
+        .collect::<Vec<_>>()
+        .join(" ");
     let line = format!(
         "{}\t{:?}\t{}\t{}\t{}\n",
         ts,
         code,
         elapsed.as_millis(),
         cwd.display(),
-        args.join(" ")
+        safe_args
     );
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
         let _ = f.write_all(line.as_bytes());
+    }
+}
+
+/// 清理 URL authority 中的 user:password@ 或 token@ 凭证段。
+fn redact_url_credentials(value: &str) -> String {
+    let Some(scheme_end) = value.find("://") else {
+        return value.to_string();
+    };
+    let authority_start = scheme_end + 3;
+    let authority_end = value[authority_start..]
+        .find(['/', '?', '#'])
+        .map(|offset| authority_start + offset)
+        .unwrap_or(value.len());
+    let authority = &value[authority_start..authority_end];
+    let authority_safe = if let Some(at) = authority.rfind('@') {
+        format!(
+            "{}***@{}{}",
+            &value[..authority_start],
+            &authority[at + 1..],
+            &value[authority_end..]
+        )
+    } else {
+        value.to_string()
+    };
+    let Some(query_start) = authority_safe.find('?') else {
+        return authority_safe;
+    };
+    let query_end = authority_safe[query_start + 1..]
+        .find('#')
+        .map(|offset| query_start + 1 + offset)
+        .unwrap_or(authority_safe.len());
+    let query = &authority_safe[query_start + 1..query_end];
+    let safe_query = query
+        .split('&')
+        .map(|part| {
+            let key = part.split('=').next().unwrap_or("");
+            let key_lower = key.to_ascii_lowercase();
+            if [
+                "token",
+                "password",
+                "passwd",
+                "secret",
+                "authorization",
+                "auth",
+                "api_key",
+            ]
+            .iter()
+            .any(|needle| key_lower.contains(needle))
+            {
+                format!("{key}=***")
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("&");
+    format!(
+        "{}?{}{}",
+        &authority_safe[..query_start],
+        safe_query,
+        &authority_safe[query_end..]
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_url_credentials;
+
+    #[test]
+    fn diagnostics_redact_credentials_embedded_in_remote_urls() {
+        assert_eq!(
+            redact_url_credentials("https://user:secret@example.com/org/repo.git"),
+            "https://***@example.com/org/repo.git"
+        );
+        assert_eq!(
+            redact_url_credentials("https://example.com/repo.git?access_token=secret&ref=main"),
+            "https://example.com/repo.git?access_token=***&ref=main"
+        );
+        assert_eq!(
+            redact_url_credentials("git@github.com:org/repo.git"),
+            "git@github.com:org/repo.git"
+        );
+        assert_eq!(redact_url_credentials("origin"), "origin");
     }
 }

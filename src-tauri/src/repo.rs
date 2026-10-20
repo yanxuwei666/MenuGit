@@ -183,7 +183,8 @@ pub fn parse_porcelain_v2(raw: &str) -> PorcelainStatus {
 
 /// 从原始 porcelain 输出中提取 branch.oid
 fn status_branch_oid(raw: &str) -> Option<String> {
-    raw.split('\0').find_map(|t| t.strip_prefix("# branch.oid ").map(String::from))
+    raw.split('\0')
+        .find_map(|t| t.strip_prefix("# branch.oid ").map(String::from))
 }
 
 /// 解析 `git diff --numstat -z` 输出：路径 → (增行数, 删行数, 是否二进制)。
@@ -232,7 +233,10 @@ pub fn parse_numstat_z(raw: &str) -> HashMap<String, (Option<u64>, Option<u64>, 
 
 /// 执行 `git status --porcelain=v2 --branch -z` 并解析
 pub fn collect_status(root: &Path) -> Result<PorcelainStatus, GitError> {
-    let out = git::run(&["status", "--porcelain=v2", "--branch", "-z"], &git::RunOptions::local(root))?;
+    let out = git::run(
+        &["status", "--porcelain=v2", "--branch", "-z"],
+        &git::RunOptions::local(root),
+    )?;
     Ok(parse_porcelain_v2(&out.stdout))
 }
 
@@ -245,7 +249,7 @@ pub fn status_label(entry: &PorcelainEntry) -> &'static str {
         return "untracked";
     }
     let x = entry.xy.as_bytes().first().copied().unwrap_or(b'.');
-    let y = entry.xy.as_bytes().nth(1).copied().unwrap_or(b'.');
+    let y = entry.xy.as_bytes().get(1).copied().unwrap_or(b'.');
     if x == b'R' || y == b'R' || x == b'C' || y == b'C' {
         "renamed"
     } else if x == b'A' || y == b'A' {
