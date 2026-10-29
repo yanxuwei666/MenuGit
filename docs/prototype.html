@@ -12,6 +12,8 @@
     --ok:#1a7f4b; --ok-soft:#e6f4ec;
     --warn:#b7791f; --warn-soft:#fdf3e0;
     --bad:#c0392b; --bad-soft:#fdecea;
+    --cf-local:#2563ae; --cf-local-soft:#e8f0fe;
+    --cf-remote:#6b4fa3; --cf-remote-soft:#f1ecfa;
     --mono:ui-monospace,"SF Mono",Consolas,Menlo,monospace;
     --radius:8px;
   }
@@ -171,16 +173,6 @@
   .f-li:hover{background:#f6f8fb;}
   .f-li.sel{background:var(--accent-soft);}
   .f-li.resolved{background:var(--ok-soft);}
-  .mg-hunk{border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:10px;}
-  .mg-hunk.decided{border-color:var(--ok);}
-  .mg-head{display:flex; justify-content:space-between; font-size:12px; color:var(--ink3); margin-bottom:8px;}
-  .mg-cols{display:flex; gap:10px;}
-  .mg-col{flex:1; min-width:0; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
-  .mg-col .cap{font-size:11.5px; padding:5px 10px; background:#f3f4f8; color:var(--ink2); font-weight:600;}
-  .mg-col .code{font-family:var(--mono); font-size:12px; padding:8px 10px; white-space:pre-wrap; word-break:break-all; background:#fbfbfd; min-height:34px;}
-  .mg-col.pick{border-color:var(--ok); box-shadow:inset 0 0 0 1px var(--ok);}
-  .mg-col.pick .cap{background:var(--ok-soft); color:var(--ok);}
-  .mg-acts{display:flex; gap:8px; margin-top:8px;}
   .f-li .nm{flex:1; font-family:var(--mono); font-size:12.5px; word-break:break-all;}
   .f-li .stat{font-size:12px; color:var(--ink3); font-family:var(--mono);}
   .f-li .acts{display:flex; gap:6px;}
@@ -212,6 +204,186 @@
   .diff .cs{background:#fdf3e0; color:var(--warn); font-weight:700;}
   .diff .ct{background:#fdecea; color:var(--bad); font-weight:700;}
   .diff-empty{color:var(--ink3); font-size:12.5px; text-align:center; padding:18px 0;}
+
+  /* ───── 解决冲突工作台 ───── */
+  .cf-body{height:calc(86vh - 84px); min-height:480px; display:flex; flex-direction:column;
+    gap:10px; position:relative;}
+  .cf-head{flex:none;}
+  .cf-head-row{display:flex; align-items:flex-start; gap:14px;}
+  .cf-title{display:flex; gap:11px; min-width:0;}
+  .cf-warn{width:34px; height:34px; flex:none; border-radius:9px; display:grid; place-items:center;
+    background:var(--warn-soft); color:var(--warn); font-weight:800; font-size:17px; border:1px solid #ecd9b4;}
+  .cf-title h3{font-size:16.5px; line-height:1.35;}
+  .cf-title p{font-size:12px; color:var(--ink3); margin-top:2px;}
+  .cf-title code{font-family:var(--mono); font-size:11.5px; color:var(--ink2); background:#f3f4f8;
+    padding:0 5px; border-radius:4px;}
+  .cf-bulk{display:flex; align-items:center; gap:6px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end;}
+  .cf-bulk .lab{font-size:11.5px; color:var(--ink3); white-space:nowrap;}
+  .cf-all-done{font-size:12px; color:var(--ok); font-weight:700;}
+  .cf-progress-row{display:flex; align-items:center; gap:10px; margin-top:10px;}
+  .cf-progress{flex:1; height:6px; border-radius:999px; background:var(--line); overflow:hidden;}
+  .cf-progress i{display:block; height:100%; background:var(--ok); border-radius:999px; transition:width .18s;}
+  .cf-progress-row .txt{font-size:12px; color:var(--ink2); white-space:nowrap;}
+  .cf-progress-row .txt b{color:var(--ok);}
+  .cf-progress-row .remain{font-size:12px; color:var(--ink3); white-space:nowrap;}
+  .cf-undo-bar{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink2);
+    background:var(--accent-soft); border:1px solid #cfe0f5; border-radius:7px; padding:5px 10px; flex:none;}
+  .cf-undo-bar b{color:var(--ink);}
+  .cf-undo-bar button{color:var(--accent); font-weight:700; font-size:12px;}
+  .cf-undo-bar button:hover{text-decoration:underline;}
+
+  .cf-workspace{flex:1; min-height:0; display:flex; border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; background:#fff;}
+  .cf-side{width:280px; flex:none; display:flex; flex-direction:column; border-right:1px solid var(--line);
+    background:#f7f8fa; min-height:0;}
+  .cf-side-head{display:flex; align-items:center; gap:7px; padding:10px 12px;
+    border-bottom:1px solid var(--line); flex:none;}
+  .cf-side-head b{font-size:12.5px; color:var(--ink2);}
+  .cf-side-head span{font-size:11px; color:var(--ink3);}
+  .cf-side-list{flex:1; overflow:auto; padding:5px;}
+  .cf-file{display:flex; align-items:center; gap:8px; padding:7px 8px; border:1px solid transparent;
+    border-radius:7px; cursor:pointer;}
+  .cf-file:hover{background:#eef3fa;}
+  .cf-file.sel{background:var(--accent-soft); border-color:color-mix(in srgb,var(--accent) 28%,transparent);}
+  .cf-file.done .cf-file-name{color:var(--ink2);}
+  .cf-ext{width:32px; height:26px; flex:none; border-radius:5px; display:grid; place-items:center;
+    font-family:var(--mono); font-size:9px; font-weight:800; letter-spacing:.2px;
+    background:#eceff4; color:var(--ink3); border:1px solid var(--line);}
+  .cf-file.sel .cf-ext{background:#fff; color:var(--accent); border-color:#cfe0f5;}
+  .cf-file.done .cf-ext{background:var(--ok-soft); color:var(--ok); border-color:#bfe3ce;}
+  .cf-file-main{flex:1; min-width:0;}
+  .cf-file-name{font-family:var(--mono); font-size:11.5px; line-height:1.45; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .cf-file-meta{font-size:10.5px; color:var(--ink3); display:flex; align-items:center; gap:5px; line-height:1.4;}
+  .cf-file-meta .bin{color:var(--warn); font-weight:600;}
+  .cf-state{font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; white-space:nowrap; flex:none;}
+  .cf-state.pending{background:var(--bad-soft); color:var(--bad);}
+  .cf-state.done{background:var(--ok-soft); color:var(--ok);}
+  .cf-side-tip{flex:none; padding:8px 11px; border-top:1px solid var(--line); font-size:10.5px;
+    color:var(--ink3); line-height:1.5; background:#f2f4f8;}
+
+  .cf-main{flex:1; min-width:0; display:flex; flex-direction:column; min-height:0;}
+  .cf-main-head{flex:none; display:flex; align-items:flex-start; gap:10px; padding:10px 14px;
+    border-bottom:1px solid var(--line); background:#fff; flex-wrap:wrap;}
+  .cf-main-title{flex:1 1 220px; min-width:0;}
+  .cf-main-title h4{font-family:var(--mono); font-size:12.5px; line-height:1.5; word-break:break-all;}
+  .cf-main-title p{font-size:11px; color:var(--ink3); margin-top:1px;}
+  .cf-main-actions{display:flex; align-items:center; gap:6px; flex:none; flex-wrap:wrap; justify-content:flex-end;}
+  .cf-scroll{flex:1; overflow:auto; padding:12px 14px; background:#fbfbfd;}
+  .cf-empty{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; color:var(--ink3); font-size:12.5px; text-align:center; padding:30px;}
+  .cf-empty .big{font-size:30px; opacity:.4;}
+
+  /* 合并结果：每个文件只有一个编辑区，冲突块内联采用 */
+  .cf-editor-card{flex:1; min-height:0; display:flex; flex-direction:column; margin:10px 12px;
+    border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#fff;}
+  .cf-editor-card:focus-within{border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent);}
+  .cf-editor-shell{flex:1; min-height:0; display:flex; background:#fff;}
+  .cf-editor-gutter{flex:none; width:46px; padding:10px 8px 10px 0; overflow:hidden;
+    background:#f7f8fa; border-right:1px solid var(--line); color:#aeb4c0;
+    font-family:var(--mono); font-size:11.5px; line-height:20px; text-align:right; user-select:none;}
+  .cf-editor-gutter>div{white-space:pre; will-change:transform;}
+  .cf-editor-code{position:relative; flex:1; min-width:0; overflow:hidden;}
+  .cf-band-layer,.cf-action-layer{position:absolute; inset:0; overflow:hidden; pointer-events:none;}
+  .cf-band-layer{z-index:0;}
+  .cf-action-layer{z-index:3;}
+  .cf-band{position:absolute; left:0; right:0; border-left:3px solid transparent;}
+  .cf-band.marker{background:rgba(199,73,61,.06); border-left-color:#e5b2ac;}
+  .cf-band.local{background:rgba(43,108,216,.065); border-left-color:#a9c2ec;}
+  .cf-band.remote{background:rgba(26,127,75,.07); border-left-color:#a6d3b9;}
+  .cf-result-area{position:absolute; inset:0; z-index:2; width:100%; height:100%; min-width:0;
+    border:0; outline:0; resize:none; padding:10px 164px 14px 12px; background:transparent; color:var(--ink);
+    font-family:var(--mono); font-size:11.5px; line-height:20px; white-space:pre; tab-size:2; overflow:auto;}
+  .cf-conflict-actions{position:absolute; right:10px; display:flex; align-items:center; gap:3px;
+    height:18px; padding:0 3px; border-radius:5px; background:rgba(255,255,255,.94);
+    box-shadow:0 0 0 1px var(--line), 0 1px 3px rgba(20,24,32,.06);
+    pointer-events:auto; white-space:nowrap;}
+  .cf-conflict-actions .lead{font-size:9.5px; color:var(--ink3); padding:0 2px 0 3px;}
+  .cf-conflict-actions button{height:15px; padding:0 5px; border-radius:3px; font-size:10px; font-weight:700;}
+  .cf-conflict-actions .local{color:var(--cf-local);}
+  .cf-conflict-actions .local:hover{background:var(--cf-local-soft);}
+  .cf-conflict-actions .remote{color:var(--cf-remote);}
+  .cf-conflict-actions .remote:hover{background:var(--cf-remote-soft);}
+  .cf-conflict-actions .both{color:var(--ink2);}
+  .cf-conflict-actions .both:hover{background:#f0f1f5;}
+  .btn.cf-btn-local{background:var(--cf-local);}
+  .btn.cf-btn-remote{background:var(--cf-remote);}
+  .btn.ghost.cf-file-local{color:var(--cf-local); border-color:#c8d9f0;}
+  .btn.ghost.cf-file-local:hover{background:var(--cf-local-soft);}
+  .btn.ghost.cf-file-remote{color:var(--cf-remote); border-color:#d8cdea;}
+  .btn.ghost.cf-file-remote:hover{background:var(--cf-remote-soft);}
+
+  .cf-binary{background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px;}
+  .cf-binary-top{display:flex; align-items:center; gap:12px; margin-bottom:14px;}
+  .cf-binary-ic{width:44px; height:44px; border-radius:10px; flex:none; display:grid; place-items:center;
+    background:#eceff4; color:var(--ink3); border:1px solid var(--line);
+    font-family:var(--mono); font-size:10px; font-weight:800;}
+  .cf-binary-top h4{font-size:14px;}
+  .cf-binary-top p{font-size:11.5px; color:var(--ink3); line-height:1.6;}
+  .cf-binary-opts{display:flex; gap:10px;}
+  .cf-binary-opt{flex:1; text-align:left; border:1px solid var(--line); border-radius:9px;
+    padding:12px; background:#fbfbfd; cursor:pointer;}
+  .cf-binary-opt:hover{border-color:var(--ink3);}
+  .cf-binary-opt.chosen{border-color:var(--ok); background:var(--ok-soft);}
+  .cf-binary-opt .tag{display:inline-block; font-size:10px; font-weight:700; border-radius:999px;
+    padding:1px 7px; margin-bottom:6px;}
+  .cf-binary-opt.local .tag{background:var(--cf-local-soft); color:var(--cf-local);}
+  .cf-binary-opt.remote .tag{background:var(--cf-remote-soft); color:var(--cf-remote);}
+  .cf-binary-opt b{display:block; font-size:12.5px; font-family:var(--mono); word-break:break-all;}
+  .cf-binary-opt small{display:block; font-size:10.5px; color:var(--ink3); margin-top:3px;}
+  .cf-binary-opt .mark{display:inline-block; margin-top:7px; font-size:11px; font-weight:700; color:var(--ok);}
+
+  .cf-editor-foot{flex:none; display:flex; align-items:center; gap:8px; padding:6px 11px;
+    border-top:1px solid var(--line); background:#fafbfc; flex-wrap:wrap;}
+  .cf-editor-foot .spacer{flex:1;}
+  .cf-editor-stat{font-size:10.5px; color:var(--ink3); white-space:nowrap;}
+  .cf-editor-stat.bad{color:var(--bad); font-weight:600;}
+  .cf-editor-hint{font-size:10.5px; color:var(--ink3); white-space:nowrap;}
+
+  .cf-foot{flex:none; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .cf-msg{flex:1; min-width:260px; display:flex; align-items:center; gap:8px;}
+  .cf-msg label{font-size:11px; color:var(--ink3); white-space:nowrap;}
+  .cf-msg input{flex:1; min-width:0; padding:6px 10px; border:1px solid var(--line);
+    border-radius:7px; background:#fafbfc; font-size:12.5px;}
+  .cf-msg input:focus{outline:2px solid color-mix(in srgb,var(--accent) 30%,transparent); border-color:var(--accent);}
+  .cf-foot-actions{display:flex; align-items:center; gap:8px; margin-left:auto;}
+  .cf-foot-hint{font-size:11px; color:var(--ink3); white-space:nowrap;}
+  .btn.ghost.danger-text{color:var(--bad); border-color:#efb2aa;}
+  .btn.ghost.danger-text:hover{background:var(--bad-soft);}
+
+  @media (max-width: 820px){
+    .mwin.cf-win{max-height:92vh;}
+    .cf-body{height:calc(92vh - 84px); min-height:520px;}
+    .cf-workspace{flex-direction:column;}
+    .cf-side{width:auto; max-height:none; border-right:none; border-bottom:1px solid var(--line);}
+    .cf-side-head{padding:8px 11px;}
+    .cf-side-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:2px;
+      padding:6px 8px 8px; max-height:146px; overflow-y:auto;}
+    .cf-file{min-width:0; flex:none;}
+    .cf-side-tip{display:none;}
+    .cf-main{min-height:0;}
+    .cf-head-row{flex-wrap:wrap;}
+    .cf-bulk{margin-left:0; width:100%; justify-content:flex-start;}
+    .cf-progress-row{flex-wrap:wrap;}
+    .cf-foot-actions{margin-left:0; width:100%; justify-content:flex-end;}
+    .cf-msg{min-width:100%;}
+    .cf-editor-card{margin:8px 10px;}
+    .cf-result-area{padding-right:122px;}
+    .cf-conflict-actions{right:8px;}
+    .cf-conflict-actions .lead{display:none;}
+  }
+
+  .cf-confirm-layer{position:absolute; inset:-4px; z-index:20; background:rgba(20,24,32,.32);
+    backdrop-filter:blur(1px); display:flex; align-items:center; justify-content:center; border-radius:10px;}
+  .cf-confirm{width:min(430px,90%); background:#fff; border-radius:11px; padding:18px;
+    box-shadow:0 20px 50px rgba(10,14,22,.3);}
+  .cf-confirm h4{font-size:14.5px; margin-bottom:6px;}
+  .cf-confirm p{font-size:12px; color:var(--ink3); line-height:1.7; margin-bottom:14px;}
+  .cf-confirm p b{color:var(--ink2);}
+  .cf-confirm code{font-family:var(--mono); font-size:11px; color:var(--ink2);
+    background:#f3f4f8; padding:0 4px; border-radius:4px;}
+  .cf-confirm-actions{display:flex; justify-content:flex-end; gap:8px;}
 
   .msg-box{width:100%; min-height:64px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;
     font-size:13.5px; resize:vertical; background:#fafbfc;}
@@ -375,16 +547,90 @@ const DIFFS = {
   ],
 };
 const CONF_FILES = {
-  'src/config.py':{ hunks:[
-    { note:'重试次数', ctxBefore:['TIMEOUT = 30'],
-      local:['RETRIES = 3'], remote:['RETRIES = 5'],
-      ctxAfter:['', 'LOG_LEVEL = "info"'] },
+  '.gitignore':{ hunks:[
+    { note:'忽略规则', ctxBefore:['node_modules/','dist/'],
+      local:['.env.local','*.log'],
+      remote:['.env','coverage/','*.log'],
+      ctxAfter:['.DS_Store'] },
   ]},
-  'README.md':{ hunks:[
-    { note:'项目说明', ctxBefore:['# my-project'],
-      local:['本地开发版说明：需要 Python 3.10+。'],
-      remote:['团队版说明：需要 Python 3.12+，详见 docs/install.md。'],
+  'PROJECT-STATUS.md':{ hunks:[
+    { note:'已知问题', ctxBefore:['## 已知问题'],
+      local:['- Finder 菜单偶发不显示（已修复）'],
+      remote:['- Finder 菜单偶发不显示（已修复）','- Windows 端尚未实机验收'],
       ctxAfter:[] },
+    { note:'验证命令', ctxBefore:['## 验证'],
+      local:['npm run test:findersync'],
+      remote:['cargo test && npm run test:findersync'],
+      ctxAfter:[] },
+  ]},
+  'src-tauri/Cargo.lock':{ hunks:[
+    { note:'tauri 版本 · 锁文件建议整份采用', ctxBefore:['[[package]]','name = "tauri"'],
+      local:['version = "2.12.3"'],
+      remote:['version = "2.9.5"'],
+      ctxAfter:['source = "registry+https://github.com/rust-lang/crates.io-index"'] },
+  ]},
+  'src-tauri/icons/icon.ico':{ binary:true, size:'1.1 MB' },
+  'src-tauri/src/main.rs':{ hunks:[
+    { note:'启动时注册的命令', ctxBefore:['invoke_handler(tauri::generate_handler!['],
+      local:['    ops::auth::save_https_credential,'],
+      remote:['    ops::sync::push,'],
+      ctxAfter:['])'] },
+  ]},
+  'src-tauri/src/ops/conflict.rs':{ hunks:[
+    { note:'解析末尾换行', ctxBefore:['pub fn parse_conflict_text(text: &str) {'],
+      local:["    let body = text.strip_suffix('\\n').unwrap_or(text);"],
+      remote:["    let raw_lines: Vec<&str> = text.split('\\n').collect();"],
+      ctxAfter:['}'] },
+    { note:'写回文件', ctxBefore:['std::fs::write('],
+      local:['    &full, rebuilt.as_bytes(),'],
+      remote:['    &full, rebuilt.as_bytes().to_vec(),'],
+      ctxAfter:[')'] },
+  ]},
+  'src-tauri/src/ops/initclone.rs':{ hunks:[
+    { note:'克隆命令保留进度回调', ctxBefore:['let mut opts = git::RunOptions::net(parent);'],
+      local:['opts.on_stderr_text = Some(callback);'],
+      remote:['opts.timeout = Some(Duration::from_secs(600));'],
+      ctxAfter:['git::run(&args, &opts)?;'] },
+  ]},
+  'src-tauri/src/ops/logop.rs':{ hunks:[
+    { note:'日志分页大小', ctxBefore:['let page_size ='],
+      local:['    80;'],
+      remote:['    50;'],
+      ctxAfter:['let page = offset / page_size;'] },
+  ]},
+  'src/App.vue':{ hunks:[
+    { note:'全局通知入口', ctxBefore:['// 全局反馈'],
+      local:['import { notifySuccess, notifyError } from "./ui/feedback";'],
+      remote:['import { ElMessage } from "element-plus";'],
+      ctxAfter:[] },
+    { note:'深链事件处理', ctxBefore:['listen("cli-args"'],
+      local:['  if (!payload.trim()) return;'],
+      remote:['  await handleArgs(payload);'],
+      ctxAfter:['});'] },
+  ]},
+  'src/api.ts':{ hunks:[
+    { note:'错误类别', ctxBefore:['export type GitErrorKind ='],
+      local:['  | "AuthRejected"','  | "Cancelled";'],
+      remote:['  | "Network"','  | "Other";'],
+      ctxAfter:[] },
+  ]},
+  'src/stores/commit.ts':{ hunks:[
+    { note:'冲突文件过滤', ctxBefore:['const unstaged = computed(() =>'],
+      local:['  files.value.filter((file) => !file.unmerged)'],
+      remote:['  files.value.filter((file) => file.staged === false)'],
+      ctxAfter:[');'] },
+  ]},
+  'src/views/CommitView.vue':{ hunks:[
+    { note:'提交按钮禁用条件', ctxBefore:[':disabled="'],
+      local:['!message.trim() || conflictCount > 0'],
+      remote:['!message.trim() || files.length === 0'],
+      ctxAfter:['"'] },
+  ]},
+  'src/views/PushView.vue':{ hunks:[
+    { note:'认证失败引导', ctxBefore:['<el-alert v-if="errorMessage"'],
+      local:[`  <el-button v-if="errorKind === 'AuthRejected'">配置 HTTPS 凭据</el-button>`],
+      remote:['  <el-button @click="openPull">立即拉取</el-button>'],
+      ctxAfter:['</el-alert>'] },
   ]},
 };
 let LOG = [
@@ -526,6 +772,7 @@ $('#fmFiles').addEventListener('click', e => {
 /* ══════════ 窗口框架 ══════════ */
 function openWin(title, bodyHTML, width){
   const ov = $('#overlay');
+  $('#mwin').classList.remove('cf-win');
   $('#mwin').style.width = width || '';
   $('#mwin').innerHTML =
     '<div class="mbar">' + (S.os==='mac' ? '<div class="lights"><i></i><i></i><i></i></div>' : '<span style="width:8px"></span>') +
@@ -537,8 +784,18 @@ function closeWin(){
   $('#overlay').classList.remove('show');
   if (retCommit){ retCommit = false; openWinCommit(false); }
 }
-$('#overlay').addEventListener('click', e => { if (S.busy) return; if (e.target.id==='overlay' || e.target.closest('[data-close]')) closeWin(); });
-document.addEventListener('keydown', e => { if (e.key==='Escape' && !S.busy){ closeWin(); closeCtx(); } });
+$('#overlay').addEventListener('click', e => {
+  if (S.busy) return;
+  if (e.target.id==='overlay' || e.target.closest('[data-close]')) closeWin();
+});
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape' && !S.busy){
+    if ($('#overlay').classList.contains('show') && $('#cfBody') && cfConfirm){
+      cfConfirm = null; renderConflictBody(); return;
+    }
+    closeWin(); closeCtx();
+  }
+});
 
 /* ══════════ 差异视图 ══════════ */
 function diffHTML(lines){
@@ -713,11 +970,10 @@ async function pullFrom(src){
   if (S.conflictSim){
     S.conflictSim = false; $('#tglConflict').classList.remove('on');
     S.behind = 0;
-    const cf = ['src/config.py','README.md'];
-    S.conflict = { files: cf, resolved:new Set(), choices:{} };
-    cf.forEach(n => S.conflict.choices[n] = CONF_FILES[n].hunks.map(()=>null));
-    cf.forEach(n => S.files.push({name:n, st:'C'}));
-    renderFm(); toast('拉取 origin/'+esc(src)+' 产生 <b>2 个冲突</b>','err','已打开解决冲突'); openWinConflict();
+    const cf = Object.keys(CONF_FILES);
+    S.conflict = { files: cf, resolved:new Set(), choices:{}, edited:{} };
+    cf.forEach(n => { S.files.push({name:n, st:'C'}); });
+    renderFm(); toast('拉取 origin/'+esc(src)+' 产生 <b>'+cf.length+' 个冲突</b>','err','已打开解决冲突'); openWinConflict();
     return;
   }
   if (!S.pulled){
@@ -913,105 +1169,579 @@ function renderDiscardBody(confirmView){
 
 /* ══════════ FM-08 解决冲突 ══════════ */
 let cfView = null;
-function openWinConflict(){
-  if (!S.conflict){ toast('当前没有冲突'); return; }
-  cfView = null;
-  openWin('解决冲突 · my-project', '<div id="cfBody"></div>');
-  renderConflictBody();
-}
-function mergedLines(f){
-  const info = CONF_FILES[f]; const ch = S.conflict.choices[f]||[];
-  let out = [];
-  info.hunks.forEach((hk,i)=>{
-    out.push(...hk.ctxBefore);
-    const d = ch[i];
-    if (d==='local') out.push(...hk.local);
-    else if (d==='remote') out.push(...hk.remote);
-    else if (d==='both') out.push(...hk.local, ...hk.remote);
-    out.push(...hk.ctxAfter);
+let cfConfirm = null;   // 'local' | 'remote' | 'abort'
+let cfUndo = null;      // 批量采用的撤销快照
+let cfMessage = '';
+const CF_LINE_H = 20, CF_PAD_TOP = 10;
+
+function cfInfo(f){ return CONF_FILES[f] || { hunks:[] }; }
+function cfParseBlocks(text){
+  const lines = String(text == null ? '' : text).split('\n');
+  const out = [];
+  let cur = null;
+  lines.forEach((ln,i)=>{
+    if (/^[ \t]*<<<<<<<(\s|$)/.test(ln)){
+      cur = { top:i, localStart:i+1, sep:-1, bottom:-1 };
+    } else if (cur && cur.sep < 0 && /^[ \t]*=======\s*$/.test(ln)){
+      cur.sep = i;
+    } else if (cur && cur.sep >= 0 && /^[ \t]*>>>>>>>(\s|$)/.test(ln)){
+      cur.bottom = i;
+      out.push(cur);
+      cur = null;
+    }
   });
   return out;
 }
+function cfMarkerCount(text){
+  return (String(text == null ? '' : text).match(/^[ \t]*(<<<<<<<|>>>>>>>)(?=\s|$)/gm) || []).length;
+}
+function cfHasEdited(f){ return !!(S.conflict && S.conflict.edited && S.conflict.edited[f] != null); }
+function cfResultText(f){
+  if (cfHasEdited(f)) return String(S.conflict.edited[f]);
+  return mergedLines(f).join('\n');
+}
+function cfDone(f){
+  if (!S.conflict) return false;
+  const info = cfInfo(f), ch = S.conflict.choices[f] || [];
+  if (info.binary) return !!ch[0];
+  return cfMarkerCount(cfResultText(f)) === 0;
+}
+function cfCount(f){
+  const info = cfInfo(f);
+  if (info.binary) return 1;
+  return cfParseBlocks(cfResultText(f)).length;
+}
+function cfPending(){ return S.conflict ? S.conflict.files.filter(f=>!cfDone(f)) : []; }
+function cfSyncResolved(){
+  if (!S.conflict) return;
+  S.conflict.files.forEach(f=>{
+    if (cfDone(f)) S.conflict.resolved.add(f); else S.conflict.resolved.delete(f);
+  });
+}
+function cfExt(f){
+  const base = f.split('/').pop();
+  if (base === '.gitignore') return 'GIT';
+  const parts = base.split('.');
+  if (parts.length < 2) return 'FILE';
+  const ext = parts.pop().toUpperCase();
+  return ext.length > 4 ? ext.slice(0, 4) : ext;
+}
+function cfNext(after){
+  if (!S.conflict) return null;
+  const files = S.conflict.files;
+  const start = after ? files.indexOf(after) + 1 : 0;
+  for (let n=0; n<files.length; n++){
+    const f = files[(start+n) % files.length];
+    if (!cfDone(f)) return f;
+  }
+  return null;
+}
+function mergedLines(f){
+  const out = [];
+  (cfInfo(f).hunks || []).forEach(hk=>{
+    out.push(...hk.ctxBefore,
+      '<<<<<<< 本地 '+S.branch, ...hk.local,
+      '=======', ...hk.remote,
+      '>>>>>>> 远端 origin/'+S.branch,
+      ...hk.ctxAfter);
+  });
+  return out;
+}
+function cfWholeLines(f, side){
+  const out = [];
+  (cfInfo(f).hunks || []).forEach(hk=>{
+    out.push(...hk.ctxBefore, ...(side === 'local' ? hk.local : hk.remote), ...hk.ctxAfter);
+  });
+  return out;
+}
+
+function openWinConflict(){
+  if (!S.conflict){ toast('当前没有冲突'); return; }
+  cfConfirm = null; cfUndo = null;
+  if (!S.conflict.edited) S.conflict.edited = {};
+  cfView = cfNext(null) || S.conflict.files[0] || null;
+  cfMessage = "Merge branch 'origin/"+S.branch+"' into "+S.branch;
+  openWin('解决冲突 · my-project', '<div id="cfBody" class="cf-body"></div>', 'min(1180px,96vw)');
+  $('#mwin').classList.add('cf-win');
+  renderConflictBody();
+}
+
+function cfDropUndo(){
+  if (!cfUndo) return;
+  cfUndo = null;
+  const bar = $('.cf-undo-bar');
+  if (bar) bar.remove();
+}
+
+/* ── 单一结果编辑器：冲突块着色，标记行内联采用 ── */
+function cfMetaFromText(text){
+  const s = String(text == null ? '' : text);
+  const lines = s.split('\n');
+  const blocks = cfParseBlocks(s).length;
+  const bad = cfMarkerCount(s);
+  return {
+    blocks, bad,
+    stat: lines.length+' 行 · '+s.length+' 字符'+
+      (bad ? ' · '+(blocks ? blocks+' 处冲突未解决' : '冲突标记未删除') : ''),
+    hint: bad ? '删除全部冲突标记后自动标记为已解决' : '内容会原样写入该文件',
+  };
+}
+function cfBandsHTML(blocks){
+  const out = [];
+  blocks.forEach(b=>{
+    out.push('<i class="cf-band marker" data-line="'+b.top+'" style="height:'+CF_LINE_H+'px"></i>');
+    if (b.sep > b.localStart){
+      out.push('<i class="cf-band local" data-line="'+b.localStart+'" style="height:'+((b.sep-b.localStart)*CF_LINE_H)+'px"></i>');
+    }
+    out.push('<i class="cf-band marker" data-line="'+b.sep+'" style="height:'+CF_LINE_H+'px"></i>');
+    if (b.bottom > b.sep+1){
+      out.push('<i class="cf-band remote" data-line="'+(b.sep+1)+'" style="height:'+((b.bottom-b.sep-1)*CF_LINE_H)+'px"></i>');
+    }
+    out.push('<i class="cf-band marker" data-line="'+b.bottom+'" style="height:'+CF_LINE_H+'px"></i>');
+  });
+  return out.join('');
+}
+function cfActionsHTML(blocks){
+  return blocks.map((b,i)=>
+    '<div class="cf-conflict-actions" data-block="'+i+'" data-line="'+b.top+'">'+
+      '<span class="lead">采用</span>'+
+      '<button type="button" class="local" data-cf-side="local" title="采用本地（'+esc(S.branch)+'）的这一段">本地</button>'+
+      '<button type="button" class="remote" data-cf-side="remote" title="采用远端（origin/'+esc(S.branch)+'）的这一段">远端</button>'+
+      '<button type="button" class="both" data-cf-side="both" title="本地与远端两段都保留">两者</button>'+
+    '</div>'
+  ).join('');
+}
+function cfSyncEditorScroll(){
+  const a = $('#cfResultArea'); if (!a) return;
+  const gutter = $('#cfResultGutter');
+  if (gutter) gutter.style.transform = 'translateY('+(-a.scrollTop)+'px)';
+  document.querySelectorAll('#cfBandLayer [data-line]').forEach(el=>{
+    el.style.top = (CF_PAD_TOP + (+el.dataset.line)*CF_LINE_H - a.scrollTop)+'px';
+  });
+  document.querySelectorAll('#cfActionLayer [data-block]').forEach(el=>{
+    el.style.top = (CF_PAD_TOP + (+el.dataset.line)*CF_LINE_H - a.scrollTop + 1)+'px';
+  });
+}
+function cfDecorateEditor(f){
+  const a = $('#cfResultArea'); if (!a) return;
+  const text = a.value, lines = text.split('\n'), blocks = cfParseBlocks(text);
+  const gutter = $('#cfResultGutter');
+  if (gutter) gutter.textContent = Array.from({length:lines.length},(_,i)=>i+1).join('\n');
+  const bands = $('#cfBandLayer');
+  if (bands) bands.innerHTML = cfBandsHTML(blocks);
+  const actions = $('#cfActionLayer');
+  if (actions){
+    actions.innerHTML = cfActionsHTML(blocks);
+    actions.querySelectorAll('[data-cf-side]').forEach(n=>{
+      n.onclick = e => {
+        e.stopPropagation();
+        cfApplyConflict(f, +n.parentElement.dataset.block, n.dataset.cfSide);
+      };
+    });
+  }
+  cfSyncEditorScroll();
+}
+function cfRenderEditor(f){
+  const text = cfResultText(f);
+  const lines = text.split('\n');
+  const blocks = cfParseBlocks(text);
+  const meta = cfMetaFromText(text);
+  return '<div class="cf-editor-card">'+
+    '<div class="cf-editor-shell">'+
+      '<div class="cf-editor-gutter"><div id="cfResultGutter">'+
+        Array.from({length:lines.length},(_,i)=>i+1).join('\n')+'</div></div>'+
+      '<div class="cf-editor-code">'+
+        '<div class="cf-band-layer" id="cfBandLayer">'+cfBandsHTML(blocks)+'</div>'+
+        '<div class="cf-action-layer" id="cfActionLayer">'+cfActionsHTML(blocks)+'</div>'+
+        '<textarea class="cf-result-area" id="cfResultArea" spellcheck="false" autocomplete="off" wrap="off">'+esc(text)+'</textarea>'+
+      '</div>'+
+    '</div>'+
+    '<div class="cf-editor-foot"><span class="cf-editor-stat'+(meta.bad?' bad':'')+'" id="cfResultStat">'+esc(meta.stat)+'</span>'+
+      '<span class="spacer"></span><span class="cf-editor-hint" id="cfResultHint">'+esc(meta.hint)+'</span></div>'+
+  '</div>';
+}
+function cfUpdateEditorMeta(){
+  const a = $('#cfResultArea'); if (!a) return;
+  const meta = cfMetaFromText(a.value);
+  const stat = $('#cfResultStat');
+  if (stat){ stat.textContent = meta.stat; stat.classList.toggle('bad', !!meta.bad); }
+  const hint = $('#cfResultHint');
+  if (hint) hint.textContent = meta.hint;
+}
+function cfOnResultInput(f){
+  if (!S.conflict) return;
+  const a = $('#cfResultArea'); if (!a) return;
+  const wasDone = cfDone(f);
+  S.conflict.edited[f] = a.value;
+  cfDropUndo();
+  cfDecorateEditor(f);
+  cfSyncResolved();
+  cfRefreshChrome();
+  renderStatus();
+  if (!wasDone && cfDone(f)) toast('已自动保存 <b>'+esc(f)+'</b> 的最终内容','ok','该文件已标记为已解决');
+}
+function cfApplyConflict(f, blockIndex, side){
+  if (!S.conflict || !f) return;
+  const text = cfResultText(f);
+  const blocks = cfParseBlocks(text);
+  const b = blocks[blockIndex];
+  if (!b) return;
+  const keep = ($('#cfResultArea') || {}).scrollTop || 0;
+  const lines = text.split('\n');
+  const local = lines.slice(b.localStart, b.sep);
+  const remote = lines.slice(b.sep+1, b.bottom);
+  const repl = side === 'local' ? local : side === 'remote' ? remote : local.concat(remote);
+  const wasDone = cfDone(f);
+  lines.splice(b.top, b.bottom-b.top+1, ...repl);
+  S.conflict.edited[f] = lines.join('\n');
+  cfDropUndo();
+  cfSyncResolved();
+  cfView = f;
+  renderConflictBody();
+  const after = $('#cfResultArea');
+  if (after){ after.scrollTop = keep; cfSyncEditorScroll(); }
+  renderStatus();
+  if (!wasDone && cfDone(f)) toast('已解决 <b>'+esc(f)+'</b>','ok','可继续处理下一个文件');
+}
+function cfApplyFileSide(f, side){
+  if (!S.conflict || !f) return;
+  cfUndo = null; cfConfirm = null;
+  const info = cfInfo(f);
+  if (info.binary) S.conflict.choices[f] = [side];
+  else S.conflict.edited[f] = cfWholeLines(f, side).join('\n');
+  cfSyncResolved();
+  cfView = f;
+  toast('已将 <b>'+esc(f)+'</b> 整份采用'+(side==='local'?'本地':'远端')+'版本','ok');
+  renderConflictBody(); renderStatus();
+}
+function cfApplyBulk(side){
+  if (!S.conflict) return;
+  const targets = cfPending();
+  if (!targets.length) return;
+  cfUndo = {
+    side, files: targets.slice(), view: cfView,
+    state: targets.map(f=>{
+      const info = cfInfo(f);
+      return info.binary
+        ? { text: null, bin: (S.conflict.choices[f] || [])[0] || null }
+        : { text: cfResultText(f), bin: undefined };
+    }),
+  };
+  targets.forEach(f=>{
+    const info = cfInfo(f);
+    if (info.binary) S.conflict.choices[f] = [side];
+    else S.conflict.edited[f] = cfWholeLines(f, side).join('\n');
+  });
+  cfSyncResolved();
+  cfConfirm = null;
+  cfView = targets[0];
+  toast('已将 <b>'+targets.length+' 个文件</b>全部采用'+(side==='local'?'本地':'远端')+'版本','ok');
+  renderConflictBody(); renderStatus();
+}
+function cfUndoBulk(){
+  if (!cfUndo || !S.conflict) return;
+  const snap = cfUndo;
+  snap.files.forEach((f,i)=>{
+    const st = snap.state[i], info = cfInfo(f);
+    if (info.binary){
+      if (st.bin) S.conflict.choices[f] = [st.bin];
+      else delete S.conflict.choices[f];
+    } else {
+      S.conflict.edited[f] = st.text;
+    }
+  });
+  cfSyncResolved();
+  cfView = S.conflict.files.includes(snap.view) ? snap.view : snap.files[0];
+  cfUndo = null;
+  toast('已撤销批量采用'+(snap.side==='local'?'本地':'远端')+'版本','ok');
+  renderConflictBody(); renderStatus();
+}
+
+function cfAbortMerge(){
+  if (!S.conflict) return;
+  S.files = S.files.filter(f=>f.st!=='C');
+  S.conflict = null;
+  cfUndo = null; cfConfirm = null;
+  toast('已中止合并，恢复到拉取前状态','ok');
+  closeWin(); renderFm();
+}
+
+async function cfFinish(){
+  if (!S.conflict) return;
+  const left = cfPending().length;
+  if (left){ toast('还有 <b>'+left+'</b> 个冲突文件未解决','warn'); return; }
+  if (!busy(false)) return;
+  S.busy = true; renderStatus();
+  await sleep(600);
+  S.busy = false;
+  const c = S.conflict;
+  const h = randHash();
+  const msg = (cfMessage || '').trim() || ("Merge branch 'origin/"+S.branch+"' into "+S.branch);
+  LOG.forEach(x => x.heads = x.heads.filter(v=>v!=='HEAD' && v!==S.branch));
+  LOG.unshift({h, m:msg.split('\n')[0], a:'yxw', t:'刚刚', files:c.files.slice(), heads:['HEAD',S.branch]});
+  S.ahead++;
+  S.files = S.files.filter(f=>f.st!=='C');
+  S.conflict = null;
+  cfUndo = null; cfConfirm = null;
+  toast('合并完成，已生成提交 <b>'+h+'</b>（待推送）','ok');
+  closeWin(); renderFm();
+}
+
+function cfRenderFileList(c){
+  return c.files.map(f=>{
+    const info = cfInfo(f), done = cfDone(f), n = cfCount(f);
+    const meta = info.binary
+      ? '<span class="bin">'+(done?'已选择版本':'二进制文件')+'</span>'
+      : '<span>'+(done?'结果已保存':(n ? n+' 处冲突' : '冲突标记未清除'))+'</span>';
+    return '<div class="cf-file'+(cfView===f?' sel':'')+(done?' done':'')+'" data-cf="'+esc(f)+'">'+
+      '<span class="cf-ext">'+esc(cfExt(f))+'</span>'+
+      '<div class="cf-file-main"><div class="cf-file-name" title="'+esc(f)+'">'+esc(f)+'</div>'+
+      '<div class="cf-file-meta">'+meta+'</div></div>'+
+      '<span class="cf-state '+(done?'done':'pending')+'">'+(done?'✓ 已解决':'待解决')+'</span></div>';
+  }).join('');
+}
+
+function cfRenderBinary(f, info, ch){
+  const side = ch[0] || null;
+  const opt = (key, label, branch) => {
+    const chosen = side === key;
+    return '<button class="cf-binary-opt '+key+(chosen?' chosen':'')+'" data-file-side="'+key+'">'+
+      '<span class="tag">'+label+'</span><b>'+esc(branch)+'</b>'+
+      '<small>'+esc(info.size || '二进制文件')+' · 保留该版本的完整文件</small>'+
+      (chosen?'<span class="mark">✓ 已采用</span>':'')+'</button>';
+  };
+  return '<div class="cf-binary">'+
+    '<div class="cf-binary-top"><span class="cf-binary-ic">'+esc(cfExt(f))+'</span>'+
+    '<div><h4>二进制文件无法逐行合并</h4><p>请选择保留哪一版。选择后会直接标记为已解决，不能合并两边的内容。</p></div></div>'+
+    '<div class="cf-binary-opts">'+opt('local','本地版本', S.branch)+opt('remote','远端版本', 'origin/'+S.branch)+'</div></div>';
+}
+
+function cfMainActionsHTML(f){
+  const info = cfInfo(f), done = cfDone(f);
+  const next = done ? cfNext(f) : null;
+  const nextBtn = next ? '<button class="btn sm" data-next-file>下一个待处理 ›</button>' : '';
+  if (info.binary) return nextBtn;
+  const n = cfCount(f);
+  let html = '';
+  if (!done && n) html += '<button class="btn sm ghost" data-jump>下一处冲突 ↓</button>';
+  html += '<button class="btn sm ghost cf-file-local" data-file-side="local">整份采用本地</button>'+
+    '<button class="btn sm ghost cf-file-remote" data-file-side="remote">整份采用远端</button>';
+  return html + nextBtn;
+}
+
+function cfBulkHTML(pending){
+  return pending.length
+    ? '<span class="lab">仅未解决文件</span>'+
+      '<button class="btn sm ghost" data-bulk="local">全部采用本地</button>'+
+      '<button class="btn sm ghost" data-bulk="remote">全部采用远端</button>'
+    : '<span class="cf-all-done">✓ 全部冲突已解决</span>';
+}
+
+function cfMainStateText(f){
+  const info = cfInfo(f), done = cfDone(f);
+  if (info.binary) return done ? '已选择保留版本 · 完成合并后生效' : '二进制文件 · 只能选择保留一侧';
+  if (done) return '✓ 已解决 · 已自动保存，完成合并后写入';
+  const n = cfCount(f), bad = cfMarkerCount(cfResultText(f));
+  if (!n && bad) return '还有冲突标记未删除 · 删完标记后自动完成';
+  return n+' 处冲突 · 可直接编辑，或点冲突行右侧按钮采用一侧';
+}
+
+function cfRenderConfirm(){
+  const pending = cfPending();
+  if (cfConfirm === 'abort'){
+    return '<div class="cf-confirm-layer"><div class="cf-confirm">'+
+      '<h4>中止本次合并？</h4>'+
+      '<p>所有冲突选择都会被丢弃，仓库会恢复到拉取前的状态。<b>此操作不可撤销。</b></p>'+
+      '<div class="cf-confirm-actions"><button class="btn ghost" data-confirm-cancel>继续解决</button>'+
+      '<button class="btn danger" id="cfAbortGo">确认中止</button></div></div></div>';
+  }
+  if (cfConfirm !== 'local' && cfConfirm !== 'remote') return '';
+  const side = cfConfirm;
+  const blocks = pending.reduce((n,f)=>n+(cfInfo(f).binary?0:cfCount(f)),0);
+  const bins = pending.filter(f=>cfInfo(f).binary).length;
+  const branch = side==='local' ? esc(S.branch) : 'origin/'+esc(S.branch);
+  return '<div class="cf-confirm-layer"><div class="cf-confirm">'+
+    '<h4>全部采用'+(side==='local'?'本地':'远端')+'版本？</h4>'+
+    '<p>将把剩余 <b>'+pending.length+' 个文件</b>的 <b>'+blocks+' 处冲突</b>全部替换为 <code>'+branch+'</code> 的内容'+
+    (bins?'，<b>'+bins+' 个二进制文件</b>整份覆盖':'')+
+    '，另一侧的对应修改将被丢弃。完成合并提交前仍可重新编辑。</p>'+
+    '<div class="cf-confirm-actions"><button class="btn ghost" data-confirm-cancel>取消</button>'+
+    '<button class="btn'+(side==='local'?'':' cf-btn-remote')+'" data-confirm-apply="'+side+'">全部采用'+(side==='local'?'本地':'远端')+'</button></div></div></div>';
+}
+
 function renderConflictBody(){
   const el = $('#cfBody'); if (!el) return;
   const c = S.conflict;
-  c.files.forEach(f=>{ const ch=c.choices[f]; if (ch && ch.every(x=>x)) c.resolved.add(f); else c.resolved.delete(f); });
-  const allDone = c.resolved.size === c.files.length;
-  let html = '<div class="conf-head"><span class="b-pill">合并冲突</span><span>已解决 <b>'+c.resolved.size+'</b> / '+c.files.length+
-    '</span></div><div class="hint-bar">逐个文件解决：为每个冲突块选择保留哪一方的内容，或保留双方。一个文件的所有冲突块都决定后自动标记为已解决。</div>'+
-    '<div class="file-list">' + c.files.map(f=>{
-      const done = c.resolved.has(f);
-      return '<div class="f-li'+(cfView===f?' sel':'')+(done?' resolved':'')+'" data-cf="'+esc(f)+'"><span class="st '+(done?'stA':'stC')+'">'+(done?'已解决':'冲突')+'</span>'+
-        '<span class="nm">'+esc(f)+'</span><span class="acts">'+
-        '<button class="btn sm '+(done?'ghost':'')+'" data-cv="'+esc(f)+'">'+(done?'重新编辑':'解决 ›')+'</button></span></div>';
-    }).join('') + '</div>';
-  if (cfView && CONF_FILES[cfView]){
-    const info = CONF_FILES[cfView];
-    const ch = c.choices[cfView];
-    const col = (side, lines, d) => {
-      const pick = d===side || d==='both';
-      return '<div class="mg-col'+(pick?' pick':'')+'">'+
-        '<div class="cap">'+(side==='local' ? '你的（当前分支 '+esc(S.branch)+'）' : '传入的（origin/'+esc(S.branch)+'）')+'</div>'+
-        '<div class="code">'+(lines.length ? lines.map(l=>esc(l)).join('\n') : '&nbsp;')+'</div></div>';
-    };
-    html += info.hunks.map((hk,i)=>{
-      const d = ch[i];
-      return '<div class="mg-hunk'+(d?' decided':'')+'">'+
-        '<div class="mg-head"><span>冲突块 '+(i+1)+'/'+info.hunks.length+' · '+esc(hk.note)+'</span>'+
-        '<span>'+(d==='local'?'✔ 采用本地':d==='remote'?'✔ 采用远端':d==='both'?'✔ 保留双方':'未决定')+'</span></div>'+
-        '<div class="mg-cols">'+col('local',hk.local,d)+col('remote',hk.remote,d)+'</div>'+
-        '<div class="mg-acts">'+
-        '<button class="btn sm'+(d==='local'?'':' ghost')+'" data-mk="'+esc(cfView)+'|'+i+'|local">采用本地</button>'+
-        '<button class="btn sm'+(d==='remote'?'':' ghost')+'" data-mk="'+esc(cfView)+'|'+i+'|remote">采用远端</button>'+
-        '<button class="btn sm'+(d==='both'?'':' ghost')+'" data-mk="'+esc(cfView)+'|'+i+'|both">保留双方</button>'+
-        '</div></div>';
-    }).join('');
-    html += '<div class="diff-title"><b>合并结果（实时预览）</b><span>'+esc(cfView)+'</span></div>';
-    html += '<div class="diff" style="max-height:170px">'+mergedLines(cfView).map(l=>'<div class="ln ctxl">'+esc(l===''?' ':l)+'</div>').join('')+'</div>';
-  } else {
-    html += '<div class="diff"><div class="diff-empty">点击上方文件开始解决冲突</div></div>';
+  cfSyncResolved();
+  const pending = cfPending();
+  const total = c.files.length;
+  const done = total - pending.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  let html = '<div class="cf-head"><div class="cf-head-row">'+
+    '<div class="cf-title"><div class="cf-warn">!</div><div><h3>合并冲突</h3>'+
+    '<p>拉取 <code>origin/'+esc(S.branch)+'</code> 到 <code>'+esc(S.branch)+'</code> 时产生冲突；直接在结果里编辑或采用某一侧，全部解决后生成一个合并提交。</p></div></div>'+
+    '<div class="cf-bulk" id="cfBulk">'+cfBulkHTML(pending)+'</div></div>'+
+    '<div class="cf-progress-row"><div class="cf-progress"><i id="cfProgressFill" style="width:'+pct+'%"></i></div>'+
+    '<span class="txt" id="cfProgressTxt"><b>'+done+'</b> / '+total+' 个文件已解决</span>'+
+    '<span class="remain" id="cfRemainTxt">'+(pending.length?'还有 '+pending.length+' 个待处理':'可以完成合并提交了')+'</span></div></div>';
+  if (cfUndo){
+    html += '<div class="cf-undo-bar">已将 <b>'+cfUndo.files.length+' 个文件</b>全部采用'+(cfUndo.side==='local'?'本地':'远端')+'版本'+
+      '<button data-undo>撤销</button></div>';
   }
-  html += '<div class="win-foot"><span class="author">完成前其他写操作将被锁定</span>'+
-    '<button class="btn ghost" id="cfAbort">中止合并</button>'+
-    '<button class="btn" id="cfDone" '+(allDone?'':'disabled')+' '+(allDone?'style="background:var(--ok)"':'')+'>完成合并提交</button></div>';
+  html += '<div class="cf-workspace"><aside class="cf-side">'+
+    '<div class="cf-side-head"><b>冲突文件</b><span id="cfSideCount">'+total+' 个 · '+pending.length+' 个待解决</span></div>'+
+    '<div class="cf-side-list" id="cfFileList">'+cfRenderFileList(c)+'</div>'+
+    '<div class="cf-side-tip">点冲突行右侧按钮可整块采用一侧；也可以直接改结果，所有修改都会自动保存。</div>'+
+    '</aside><section class="cf-main">'+cfRenderMain()+'</section></div>';
+
+  html += '<div class="cf-foot"><div class="cf-msg"><label>合并提交信息</label>'+
+    '<input id="cfMsg" value="'+esc(cfMessage)+'" spellcheck="false"></div>'+
+    '<div class="cf-foot-actions"><span class="cf-foot-hint" id="cfFootHint">'+
+    (pending.length?'还有 '+pending.length+' 个文件待解决':'全部冲突已解决')+'</span>'+
+    '<button class="btn ghost danger-text" id="cfAbort">中止合并</button>'+
+    '<button class="btn'+(pending.length?'':' ok')+'" id="cfDone" '+(pending.length?'disabled':'')+'>完成合并提交</button></div></div>';
+  html += cfRenderConfirm();
   el.innerHTML = html;
-  el.querySelectorAll('[data-cf]').forEach(n => n.onclick = e => {
-    if (e.target.closest('button')) return;
-    cfView = n.dataset.cf; renderConflictBody();
-  });
-  el.querySelectorAll('[data-cv]').forEach(b => b.onclick = () => { cfView = b.dataset.cv; renderConflictBody(); });
-  el.querySelectorAll('[data-mk]').forEach(b => b.onclick = () => {
-    const parts = b.dataset.mk.split('|');
-    const f = parts.slice(0,-2).join('|'), i = +parts[parts.length-2], k = parts[parts.length-1];
-    S.conflict.choices[f][i] = k;
-    renderConflictBody(); renderStatus();
-  });
-  el.querySelector('#cfDone').onclick = async () => {
-    if (!busy(false)) return;
-    S.busy = true; await sleep(600); S.busy = false;
-    const h = randHash();
-    LOG.forEach(x => x.heads = x.heads.filter(x=>x!=='HEAD' && x!==S.branch));
-    LOG.unshift({h, m:'Merge branch \''+S.branch+'\' of origin into '+S.branch, a:'yxw', t:'刚刚', files:S.conflict.files.slice(), heads:['HEAD',S.branch]});
-    S.ahead++;
-    S.files = S.files.filter(f => f.st!=='C');
-    S.conflict = null;
-    toast('合并完成，已生成提交 <b>'+h+'</b>（待推送）','ok');
-    closeWin(); renderFm();
-  };
-  el.querySelector('#cfAbort').onclick = () => renderConflictAbort();
+  bindConflictEvents(el);
 }
-function renderConflictAbort(){
-  const el = $('#cfBody'); if (!el) return;
-  el.innerHTML = '<div class="hint-bar red">确认<b>中止合并</b>？将丢弃本次合并的所有结果，恢复到拉取前状态。</div>'+
-    '<div class="win-foot"><span class="author"></span><button class="btn ghost" onclick="openWinConflict()">返回</button>'+
-    '<button class="btn danger" id="abGo">确认中止</button></div>';
-  el.querySelector('#abGo').onclick = () => {
-    S.files = S.files.filter(f => f.st!=='C');
-    ['src/config.py','README.md'].forEach(n => S.files.push({name:n, st:'M'}));
-    S.conflict = null;
-    toast('已中止合并，恢复到拉取前状态','ok');
-    closeWin(); renderFm();
-  };
+
+function cfRenderMain(){
+  const f = cfView;
+  if (!f || !CONF_FILES[f]){
+    return '<div class="cf-empty"><div class="big">⌁</div><div>从左侧选择一个冲突文件开始处理</div></div>';
+  }
+  const info = cfInfo(f), ch = S.conflict.choices[f] || [];
+  let head = '<div class="cf-main-head"><div class="cf-main-title"><h4>'+esc(f)+'</h4>'+
+    '<p id="cfMainState">'+cfMainStateText(f)+'</p></div>'+
+    '<div class="cf-main-actions" id="cfMainActions">'+cfMainActionsHTML(f)+'</div></div>';
+  if (info.binary) return head+'<div class="cf-scroll">'+cfRenderBinary(f, info, ch)+'</div>';
+  return head+cfRenderEditor(f);
+}
+
+function bindCfFileItems(root){
+  root.querySelectorAll('[data-cf]').forEach(n=>{
+    n.onclick = () => { cfConfirm = null; cfView = n.dataset.cf; renderConflictBody(); };
+  });
+}
+
+function cfJumpConflict(){
+  const a = $('#cfResultArea'); if (!a) return;
+  const blocks = cfParseBlocks(a.value); if (!blocks.length) return;
+  const topFor = b => CF_PAD_TOP + b.top*CF_LINE_H;
+  const off = a.scrollTop;
+  let idx = blocks.findIndex(x => topFor(x) > off + 64);
+  if (idx < 0) idx = blocks.findIndex(x => topFor(x) > off + 4);
+  if (idx < 0) idx = 0;
+  let dest = Math.max(0, topFor(blocks[idx]) - 40);
+  if (Math.abs(dest - off) < 6){
+    idx = (idx + 1) % blocks.length;
+    dest = Math.max(0, topFor(blocks[idx]) - 40);
+  }
+  a.scrollTop = dest;
+  cfSyncEditorScroll();
+}
+function cfGoNextFile(){
+  const f = cfNext(cfView);
+  if (!f) return;
+  cfConfirm = null; cfView = f;
+  renderConflictBody();
+}
+
+function bindCfMainActions(root){
+  root.querySelectorAll('[data-file-side]').forEach(n=>{
+    n.onclick = e => { e.stopPropagation(); cfApplyFileSide(cfView, n.dataset.fileSide); };
+  });
+  const jump = root.querySelector('[data-jump]');
+  if (jump) jump.onclick = cfJumpConflict;
+  const next = root.querySelector('[data-next-file]');
+  if (next) next.onclick = cfGoNextFile;
+}
+
+function bindCfBulk(root){
+  root.querySelectorAll('[data-bulk]').forEach(n=>{
+    n.onclick = () => { cfConfirm = n.dataset.bulk; renderConflictBody(); };
+  });
+}
+
+function cfRefreshChrome(){
+  if (!S.conflict || !$('#cfBody')) return;
+  cfSyncResolved();
+  const c = S.conflict, f = cfView;
+  const pending = cfPending();
+  const total = c.files.length, done = total - pending.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const sideCount = $('#cfSideCount');
+  if (sideCount) sideCount.textContent = total+' 个 · '+pending.length+' 个待解决';
+  const list = $('#cfFileList');
+  if (list){
+    const top = list.scrollTop;
+    list.innerHTML = cfRenderFileList(c);
+    list.scrollTop = top;
+    bindCfFileItems(list);
+  }
+  const fill = $('#cfProgressFill');
+  if (fill) fill.style.width = pct+'%';
+  const ptxt = $('#cfProgressTxt');
+  if (ptxt) ptxt.innerHTML = '<b>'+done+'</b> / '+total+' 个文件已解决';
+  const remain = $('#cfRemainTxt');
+  if (remain) remain.textContent = pending.length ? '还有 '+pending.length+' 个待处理' : '可以完成合并提交了';
+  const bulk = $('#cfBulk');
+  if (bulk){ bulk.innerHTML = cfBulkHTML(pending); bindCfBulk(bulk); }
+  if (f && CONF_FILES[f]){
+    const state = $('#cfMainState');
+    if (state) state.textContent = cfMainStateText(f);
+    const actions = $('#cfMainActions');
+    if (actions){ actions.innerHTML = cfMainActionsHTML(f); bindCfMainActions(actions); }
+    cfUpdateEditorMeta();
+  }
+  const hint = $('#cfFootHint');
+  if (hint) hint.textContent = pending.length ? '还有 '+pending.length+' 个文件待解决' : '全部冲突已解决';
+  const finish = $('#cfDone');
+  if (finish){
+    finish.disabled = pending.length > 0;
+    finish.classList.toggle('ok', pending.length === 0);
+  }
+}
+
+function bindConflictEvents(el){
+  bindCfFileItems(el);
+  bindCfMainActions(el);
+  bindCfBulk(el);
+  const undo = el.querySelector('[data-undo]');
+  if (undo) undo.onclick = cfUndoBulk;
+  el.querySelectorAll('[data-confirm-cancel]').forEach(n=>{
+    n.onclick = () => { cfConfirm = null; renderConflictBody(); };
+  });
+  el.querySelectorAll('[data-confirm-apply]').forEach(n=>{
+    n.onclick = () => cfApplyBulk(n.dataset.confirmApply);
+  });
+  const abort = el.querySelector('#cfAbort');
+  if (abort) abort.onclick = () => { cfConfirm = 'abort'; renderConflictBody(); };
+  const abortGo = el.querySelector('#cfAbortGo');
+  if (abortGo) abortGo.onclick = cfAbortMerge;
+  const finish = el.querySelector('#cfDone');
+  if (finish) finish.onclick = cfFinish;
+  const msg = el.querySelector('#cfMsg');
+  if (msg) msg.oninput = () => { cfMessage = msg.value; };
+
+  const result = el.querySelector('#cfResultArea');
+  if (result){
+    result.oninput = () => cfOnResultInput(cfView);
+    result.onscroll = cfSyncEditorScroll;
+    result.onkeydown = e => {
+      if (e.key === 'Tab'){
+        e.preventDefault();
+        const s = result.selectionStart, en = result.selectionEnd;
+        result.value = result.value.slice(0,s)+'  '+result.value.slice(en);
+        result.selectionStart = result.selectionEnd = s+2;
+        cfOnResultInput(cfView);
+      } else if (e.key === 'Escape'){
+        e.stopPropagation();
+        result.blur();
+      }
+    };
+    cfDecorateEditor(cfView);
+  }
 }
 
 /* ══════════ FM-09/10 初始化与克隆 ══════════ */
@@ -1100,8 +1830,26 @@ $('#tglNoGit').onclick = e => { S.noGit = !S.noGit; e.target.classList.toggle('o
 $('#btnReset').onclick = () => location.reload();
 
 /* ══════════ 启动 ══════════ */
+const PREVIEW_PARAMS = new URLSearchParams(location.search);
+const previewOS = PREVIEW_PARAMS.get('os');
+if (previewOS && ['win','mac','ubuntu'].includes(previewOS)){
+  const osBtn = $('#segOs').querySelector('[data-os="'+previewOS+'"]');
+  if (osBtn) osBtn.click();
+}
 renderFm();
-setTimeout(()=>toast('欢迎使用 MenuGit 交互原型','ok','提示：顶部可切换 Windows / macOS / Ubuntu 三种系统外观'), 400);
+if (PREVIEW_PARAMS.get('conflict') === '1' && !S.conflict){
+  // 预览直达：?os=mac&conflict=1&preview=1
+  S.conflictSim = false;
+  $('#tglConflict').classList.remove('on');
+  const cf = Object.keys(CONF_FILES);
+  S.conflict = { files: cf, resolved:new Set(), choices:{}, edited:{} };
+  cf.forEach(n => { S.files.push({name:n, st:'C'}); });
+  renderFm();
+  openWinConflict();
+}
+if (!PREVIEW_PARAMS.get('preview')){
+  setTimeout(()=>toast('欢迎使用 MenuGit 交互原型','ok','提示：顶部可切换 Windows / macOS / Ubuntu 三种系统外观'), 400);
+}
 </script>
 </body>
 </html>
