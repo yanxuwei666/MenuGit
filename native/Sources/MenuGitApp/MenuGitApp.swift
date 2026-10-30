@@ -26,8 +26,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showWindow() {
-        guard let window = NSApp.windows.first(where: { $0.canBecomeKey && !($0 is NSPanel) }) else { return }
-        window.makeKeyAndOrderFront(nil)
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey && !($0 is NSPanel) }) {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        if AppModel.shared.screen != .conflicts { AppModel.shared.screen = .welcome }
+        AppModel.shared.openMainWindow?()
+    }
+}
+
+struct MenuGitCommands: Commands {
+    @ObservedObject var model: AppModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("打开仓库…") {
+                openWindow(id: "main")
+                model.chooseFolder()
+            }
+            .keyboardShortcut("o")
+            Button("新建仓库") {
+                openWindow(id: "main")
+                model.screen = .create
+            }
+            Button("克隆仓库") {
+                openWindow(id: "main")
+                model.screen = .clone
+            }
+        }
+        CommandGroup(replacing: .appSettings) {
+            Button("设置…") {
+                openWindow(id: "main")
+                model.refreshExtensionStatus()
+                model.screen = .settings
+            }
+            .keyboardShortcut(",")
+        }
     }
 }
 
@@ -35,15 +70,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct MenuGitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel.shared
+
     var body: some Scene {
         Window("MenuGit", id: "main") {
             ContentView(model: model)
-                .frame(minWidth: 960, minHeight: 560)
         }
-        .defaultSize(width: 1080, height: 760)
-        .windowStyle(.titleBar)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
-        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 490, height: 620)
+        .defaultPosition(.center)
+        .commands { MenuGitCommands(model: model) }
     }
 }

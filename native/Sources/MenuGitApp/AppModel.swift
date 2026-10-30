@@ -48,6 +48,7 @@ final class AppModel: ObservableObject {
     @Published var recentRepositories: [URL] = []
     @Published var extensionEnabled = false
     @Published var gitVersion = ""
+    var openMainWindow: (() -> Void)?
 
     struct ConflictDraft {
         let document: ConflictDocument
@@ -151,6 +152,7 @@ final class AppModel: ObservableObject {
                 remote = upstreamRemote ?? data.4.first ?? ""
                 remoteBranch = upstreamBranch ?? data.1.branch
                 setUpstream = data.1.upstream == nil
+                lastCommit = ""
                 if data.1.conflictedOperation != nil {
                     screen = .conflicts
                     await loadConflicts()
@@ -181,6 +183,7 @@ final class AppModel: ObservableObject {
         }
         screen = destination
         clearFeedback()
+        lastCommit = ""
         switch destination {
         case .history: Task { await loadHistory(reset: true) }
         case .push: Task { await loadOutgoing() }
@@ -288,6 +291,7 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 resultLog = try await Task.detached { try isPush ? repository.push(remote: targetRemote, branch: targetBranch, setUpstream: track) : repository.pull(remote: targetRemote, branch: targetBranch) }.value
+                if isPush { lastCommit = "" }
                 await refresh(); await loadOutgoing(); notice = isPush ? "推送成功。" : "拉取成功。"
             } catch {
                 await refresh()
@@ -604,7 +608,7 @@ final class AppModel: ObservableObject {
                 try await Task.detached { try repository.continueConflict() }.value
                 await refresh(); await loadOutgoing()
                 if status?.conflictedOperation != nil { screen = .conflicts; notice = "操作仍在进行，请继续处理。" }
-                else { conflictDrafts.removeAll(); screen = .push; notice = "冲突已解决；确认后可以推送。" }
+                else { conflictDrafts.removeAll(); lastCommit = ""; screen = .push; notice = "冲突已解决；确认后可以推送。" }
             }
             catch {
                 await refresh()

@@ -135,7 +135,7 @@ public struct GitRepository: Sendable {
     public func history(paths: [String] = [], skip: Int = 0, limit: Int = 200) throws -> CommitPage {
         if !paths.isEmpty { try validate(paths: paths) }
         guard skip >= 0, limit > 0 else { throw GitFailure("分页参数无效。") }
-        let result = try git.run(["log", "-n", String(limit + 1), "--skip", String(skip), "--format=%h%x00%s%x00%an%x00%ar%x00"] + (paths.isEmpty ? [] : ["--"] + paths), at: root)
+        let result = try git.run(["log", "-n", String(limit + 1), "--skip", String(skip), "--format=%h%x00%s%x00%an%x00%at%x00"] + (paths.isEmpty ? [] : ["--"] + paths), at: root)
         if result.status != 0 {
             let head = try git.run(["rev-parse", "--verify", "HEAD"], at: root)
             if head.status != 0 { return CommitPage(commits: [], hasMore: false) }
@@ -149,8 +149,24 @@ public struct GitRepository: Sendable {
         let parts = data.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self).trimmingCharacters(in: .newlines) }
         var records: [CommitRecord] = []
         var i = 0
-        while i + 3 < parts.count { records.append(CommitRecord(id: parts[i], subject: parts[i+1], author: parts[i+2], date: parts[i+3])); i += 4 }
+        while i + 3 < parts.count { records.append(CommitRecord(id: parts[i], subject: parts[i+1], author: parts[i+2], date: Self.relativeDate(parts[i+3]))); i += 4 }
         return records
+    }
+
+    private static func relativeDate(_ timestamp: String) -> String {
+        guard let time = TimeInterval(timestamp) else { return timestamp }
+        let delta = max(0, Date().timeIntervalSince1970 - time)
+        switch delta {
+        case ..<60: return "刚刚"
+        case ..<3600: return "\(Int(delta / 60)) 分钟前"
+        case ..<86400: return "\(Int(delta / 3600)) 小时前"
+        case ..<(86400 * 30): return "\(Int(delta / 86400)) 天前"
+        default:
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "yyyy-MM-dd"
+            return formatter.string(from: Date(timeIntervalSince1970: time))
+        }
     }
 
     public func validate(paths: [String]) throws {
@@ -227,7 +243,7 @@ public extension GitRepository {
         let ref = "refs/remotes/" + remote + "/" + branch
         let exists = try git.run(["show-ref", "--verify", "--quiet", ref], at: root)
         let range = exists.status == 0 ? ref + "..HEAD" : "HEAD"
-        let result = try git.run(["log", "-n", "200", "--format=%h%x00%s%x00%an%x00%ar%x00", range], at: root)
+        let result = try git.run(["log", "-n", "200", "--format=%h%x00%s%x00%an%x00%at%x00", range], at: root)
         guard result.status == 0 else { return [] }
         return parseCommits(result.stdout)
     }
