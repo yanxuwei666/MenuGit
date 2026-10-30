@@ -2,6 +2,10 @@ import AppKit
 import MenuGitCore
 import SwiftUI
 
+extension Notification.Name {
+    static let menuGitDialogLayoutChanged = Notification.Name("MenuGit.dialogLayoutChanged")
+}
+
 struct ContentView: View {
     @ObservedObject var model: AppModel
     @Environment(\.openWindow) private var openWindow
@@ -129,6 +133,8 @@ private struct WindowConfigurator: NSViewRepresentable {
             window.hasShadow = true
             window.appearance = NSAppearance(named: .aqua)
             window.isRestorable = false
+            window.animationBehavior = .none
+            if AppModel.shared.suppressWindowDisplay { window.alphaValue = 0 }
         }
 
         private func enforceFrame() {
@@ -146,6 +152,7 @@ private struct WindowConfigurator: NSViewRepresentable {
             applying = true
             defer { applying = false }
             window.setFrame(target, display: true)
+            NotificationCenter.default.post(name: .menuGitDialogLayoutChanged, object: window)
         }
     }
 
@@ -194,6 +201,8 @@ struct DialogFrame<Content: View, Footer: View>: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.dialogBorder, lineWidth: 1))
         .background(WindowConfigurator(width: width, height: height))
+        .onAppear { AppModel.shared.noteDialogAppeared(size: NSSize(width: width, height: height)) }
+        .onChange(of: height) { newHeight in AppModel.shared.noteDialogSizeChanged(NSSize(width: width, height: newHeight)) }
         .environment(\.colorScheme, .light)
     }
 }
@@ -1073,12 +1082,21 @@ struct SyncDialog: View {
     private var stateText: String {
         guard let upstream = model.status?.upstream else { return "尚未设置上游" }
         if push { return ahead > 0 ? "领先 \(upstream) \(ahead) 个提交" : "与 \(upstream) 同步" }
+        if completed { return "已从 \(upstream) 更新" }
         return "从 \(upstream) 获取并合并到当前分支"
     }
     private var stateTone: Color { push && ahead > 0 ? Theme.successText : Theme.secondary }
+    private var completed: Bool {
+        push ? model.notice.contains("推送成功") : model.notice.contains("拉取成功")
+    }
+    private var dialogHeight: CGFloat {
+        if !push { return completed ? 480 : 380 }
+        if completed { return 560 }
+        return ahead > 0 ? 620 : 460
+    }
 
     var body: some View {
-        DialogFrame(title: "\(push ? "推送" : "拉取") — \(repositoryName(model))", width: 490, height: push ? (ahead > 0 ? 620 : 460) : 380) {
+        DialogFrame(title: "\(push ? "推送" : "拉取") — \(repositoryName(model))", width: 490, height: dialogHeight) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     successCard
@@ -1091,7 +1109,7 @@ struct SyncDialog: View {
                     } else {
                         targetCard
                     }
-                    if push { outgoingCard }
+                    if push && !completed { outgoingCard }
                     if !model.resultLog.isEmpty { outputCard }
                 }
                 .padding(.horizontal, 22)
@@ -1104,10 +1122,14 @@ struct SyncDialog: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.secondary)
             Spacer(minLength: 8)
-            Button("取消") { closeDialogWindow() }.buttonStyle(SecondaryButtonStyle())
-            Button(push ? "推送" : "拉取") { push ? model.push() : model.pull() }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(!canRun || model.busy)
+            if completed {
+                Button("完成") { closeDialogWindow() }.buttonStyle(PrimaryButtonStyle())
+            } else {
+                Button("取消") { closeDialogWindow() }.buttonStyle(SecondaryButtonStyle())
+                Button(push ? "推送" : "拉取") { push ? model.push() : model.pull() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!canRun || model.busy)
+            }
         }
     }
 
@@ -1116,9 +1138,9 @@ struct SyncDialog: View {
             successBlock(title: "提交成功",
                          detail: "已保存到本地 \(branch) 分支 · \(shortHash(model.lastCommit))\n确认目标后点击「推送」，才会发送到远端。")
         } else if model.notice.contains("推送成功") {
-            successBlock(title: "推送成功", detail: model.notice)
+            successBlock(title: "推送成功", detail: "已推送到 \(model.displayTargetRemote)/\(model.displayTargetBranch)。")
         } else if model.notice.contains("拉取成功") {
-            successBlock(title: "拉取成功", detail: model.notice)
+            successBlock(title: "拉取成功", detail: "已从 \(model.displayTargetRemote)/\(model.displayTargetBranch) 更新到当前分支。")
         } else if model.notice.contains("冲突已解决") {
             successBlock(title: "冲突已解决", detail: model.notice)
         }

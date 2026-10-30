@@ -49,6 +49,11 @@ final class AppModel: ObservableObject {
     @Published var extensionEnabled = false
     @Published var gitVersion = ""
     var openMainWindow: (() -> Void)?
+    var hideWindow: (() -> Void)?
+    var revealWindow: (() -> Void)?
+    var expectedDialogSize: NSSize = .zero
+    var dialogAppearID = 0
+    var suppressWindowDisplay = true
 
     struct ConflictDraft {
         let document: ConflictDocument
@@ -95,12 +100,14 @@ final class AppModel: ObservableObject {
         let target = URL(fileURLWithPath: path)
         let items = (components.queryItems ?? []).filter { $0.name == "item" }.compactMap(\.value).filter { $0.hasPrefix("/") }.map { URL(fileURLWithPath: $0) }
         NSApp.activate(ignoringOtherApps: true)
-        if action == "settings" { screen = .settings; refreshExtensionStatus(); return }
+        hideWindow?()
+        if action == "settings" { screen = .settings; refreshExtensionStatus(); revealSoon(); return }
         if action == "init" || action == "clone" {
             var dir: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: target.path, isDirectory: &dir) else { show(GitFailure("所选路径不存在。")); return }
+            guard FileManager.default.fileExists(atPath: target.path, isDirectory: &dir) else { show(GitFailure("所选路径不存在。")); revealSoon(); return }
             targetDirectory = dir.boolValue ? target : target.deletingLastPathComponent()
             screen = action == "init" ? .create : .clone
+            revealSoon()
             return
         }
         let targetScreen: Screen
@@ -110,13 +117,29 @@ final class AppModel: ObservableObject {
         case "pull": targetScreen = .pull
         case "branches": targetScreen = .branches
         case "history": targetScreen = .history
-        default: return
+        default: revealSoon(); return
         }
         open(target, items: items, screen: targetScreen)
     }
 
+    func noteDialogAppeared(size: NSSize) {
+        expectedDialogSize = size
+        dialogAppearID += 1
+        NotificationCenter.default.post(name: .menuGitDialogLayoutChanged, object: nil)
+    }
+
+    func noteDialogSizeChanged(_ size: NSSize) {
+        guard size != expectedDialogSize else { return }
+        expectedDialogSize = size
+        NotificationCenter.default.post(name: .menuGitDialogLayoutChanged, object: nil)
+    }
+
+    private func revealSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.revealWindow?() }
+    }
+
     func open(_ url: URL, items: [URL] = [], screen destination: Screen = .commit) {
-        guard !busy else { notice = "当前操作尚未完成，请稍后再试。"; return }
+        guard !busy else { notice = "当前操作尚未完成，请稍后再试。"; revealSoon(); return }
         busy = true; clearFeedback()
         Task {
             do {
@@ -166,6 +189,7 @@ final class AppModel: ObservableObject {
                 if let selectedFile { await loadPreview(selectedFile) } else { preview = .unavailable("点击左侧文件查看差异。") }
             } catch { show(error) }
             busy = false
+            revealSoon()
         }
     }
 
