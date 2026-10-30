@@ -50,14 +50,23 @@ rm -rf "${TARGET}"
 ditto "${MOUNT}/MenuGit.app" "${TARGET}"
 xattr -dr com.apple.quarantine "${TARGET}" 2>/dev/null || true
 
-info "启动应用并注册 Finder 扩展…"
-open "${TARGET}"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+"${LSREGISTER}" -f "${TARGET}" >/dev/null 2>&1 || true
+
+info "注册 Finder 扩展…"
+APPEX="${TARGET}/Contents/PlugIns/MenuGitFinder.appex"
+registered=0
 for _ in $(seq 1 20); do
+    pluginkit -a "${APPEX}" >/dev/null 2>&1 || true
     if pluginkit -m -A -i "${BUNDLE_ID}" 2>/dev/null | grep -q "${BUNDLE_ID}"; then
+        registered=1
         break
     fi
     sleep 0.5
 done
+if [ "${registered}" -eq 0 ]; then
+    info "自动注册 Finder 扩展失败，请打开一次 MenuGit 后重试。"
+fi
 pluginkit -e use -i "${BUNDLE_ID}" 2>/dev/null || true
 
 info "重启 Finder 以加载右键菜单…"

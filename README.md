@@ -40,7 +40,7 @@ macOS 上的 Git 右键菜单工具 —— 类似 TortoiseGit 的简化版。
 curl -fsSL https://raw.githubusercontent.com/yanxuwei666/MenuGit/main/install.sh | bash
 ```
 
-脚本会自动下载最新版本、安装到 `/Applications`、启用 Finder 扩展并重启 Finder。下载走命令行，不经过浏览器隔离标记，因此不需要处理 Gatekeeper 拦截，也不用再去系统设置里手动勾选扩展。
+脚本会自动下载最新版本、安装到 `/Applications`、注册并启用 Finder 扩展，然后重启 Finder。下载走命令行，不经过浏览器隔离标记，因此不需要处理 Gatekeeper 拦截，也不用再去系统设置里手动勾选扩展；安装过程不会打开应用窗口。
 
 ### 手动安装（DMG）
 
