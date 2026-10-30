@@ -32,7 +32,7 @@ macOS 上的 Git 右键菜单工具 —— 类似 TortoiseGit 的简化版。
 
 ## 安装
 
-### 快速安装（一条命令）
+### 推荐：一行命令安装
 
 在终端执行：
 
@@ -40,17 +40,28 @@ macOS 上的 Git 右键菜单工具 —— 类似 TortoiseGit 的简化版。
 curl -fsSL https://raw.githubusercontent.com/yanxuwei666/MenuGit/main/install.sh | bash
 ```
 
-脚本会自动下载最新版本、安装到 `/Applications`、注册并启用 Finder 扩展，然后重启 Finder。下载走命令行，不经过浏览器隔离标记，因此不需要处理 Gatekeeper 拦截，也不用再去系统设置里手动勾选扩展；安装过程不会打开应用窗口。
+脚本会自动下载最新版本、安装到 `/Applications`、注册并启用 Finder 扩展，然后重启 Finder，装完即可在 Finder 里右键使用。安装过程不会打开应用窗口。
+
+#### 为什么推荐命令行，而不是直接双击 DMG
+
+DMG 安装包仍然保留（见 [Releases](https://github.com/yanxuwei666/MenuGit/releases)），供归档、离线分发或偏好图形界面操作的场景使用。但从浏览器下载的文件会被 macOS 打上 `com.apple.quarantine` 隔离标记，而 MenuGit 是 ad-hoc 签名、没有 Apple 公证（公证需要付费开发者账号），于是 DMG 安装会碰到两个坎：
+
+- 首次双击启动被 Gatekeeper 拦下，提示“Apple 无法检查其是否包含恶意软件”，需要按住 Control 点开或手动清除隔离标记；
+- 应用没有成功启动过一次，Finder 扩展就不会注册，右键菜单不出现，容易被误认为安装失败。
+
+命令行安装绕开了这两点：`curl` 下载的文件不带隔离标记，脚本还会直接完成扩展注册、启用和 Finder 重启，不需要处理 Gatekeeper，也不用去系统设置里手动勾选扩展。
 
 ### 手动安装（DMG）
 
 1. 从 [Releases](https://github.com/yanxuwei666/MenuGit/releases) 下载最新的 `MenuGit-v0.1.1.dmg`。
 2. 双击打开 DMG，把 `MenuGit.app` 拖进 `Applications` 文件夹。
-3. 首次启动：本项目没有 Apple Developer 签名和公证，双击会被 Gatekeeper 拦截。请按住 Control 点击图标选择“打开”，或在终端执行一次：
+3. 清除隔离标记：未公证的应用双击会被 Gatekeeper 拦下，先在终端执行
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/MenuGit.app
    ```
+
+   或者按住 Control 点击图标，选择“打开”。
 
 4. 打开一次 MenuGit，让系统注册 Finder 扩展。
 5. 打开“系统设置 → 通用 → 登录项与扩展 → Finder 扩展”启用 **MenuGit**（macOS 13 为“系统设置 → 隐私与安全性 → 扩展 → Finder 扩展”）。
