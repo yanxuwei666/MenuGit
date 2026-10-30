@@ -1832,7 +1832,7 @@ struct SettingsDialog: View {
                 .padding(12)
                 if !model.extensionEnabled {
                     Rectangle().fill(Theme.hairline).frame(height: 1)
-                    Text("在“系统设置 → 通用 → 登录项与扩展 → Finder 扩展”中启用 MenuGit。")
+                    Text("在系统设置中启用 MenuGit 的 Finder 扩展：通用 → 登录项与扩展（macOS 13：隐私与安全性 → 扩展）。")
                         .font(.system(size: 10.5))
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)

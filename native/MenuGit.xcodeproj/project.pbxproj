@@ -16,6 +16,7 @@
 		85CAA23914C2981BD6A9A9B0 /* MenuGitFinder.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 708BA11F4A3A022279FB3226 /* MenuGitFinder.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		96FFB73D1539DF9F943D261F /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05531CEB49F2B2C9053C6AFD /* ContentView.swift */; };
 		9F2EF11305B59E220D86CE23 /* Repository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B3A9FC9D75F8D7626FE517 /* Repository.swift */; };
+		AC99D5917AF79544F40F917E /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = FF952A6707E421EDFAAE5365 /* AppIcon.icns */; };
 		C9EB48E1FE220D8B8D7097EB /* MenuGitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96E0CFD3CC820897C905A1F4 /* MenuGitApp.swift */; };
 		E36A65899F19C76039A68A78 /* MenuGitCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 56EA071D8B3E40BB322DECEF /* MenuGitCore.framework */; };
 		F4F90696D62FBC1BD47C1909 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 713328F31F97451101884448 /* AppModel.swift */; };
@@ -76,6 +77,7 @@
 		96E0CFD3CC820897C905A1F4 /* MenuGitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuGitApp.swift; sourceTree = "<group>"; };
 		BE7C663EDD366F69502CA3FE /* MenuGit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MenuGit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9B3A9FC9D75F8D7626FE517 /* Repository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Repository.swift; sourceTree = "<group>"; };
+		FF952A6707E421EDFAAE5365 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		886615A053F61100AA91D8EF /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FF952A6707E421EDFAAE5365 /* AppIcon.icns */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		8B9A5A7B79542F5666CFAF5A /* MenuGitFinder */ = {
 			isa = PBXGroup;
 			children = (
@@ -132,6 +142,7 @@
 		D0311D16B2609D9E77EBD45A = {
 			isa = PBXGroup;
 			children = (
+				886615A053F61100AA91D8EF /* Resources */,
 				CA76735892CF1B6EA95616F8 /* Sources */,
 				9B1BE22BF2B0E2FB7A02B80D /* Products */,
 			);
@@ -156,6 +167,7 @@
 			buildConfigurationList = 72D75581B8C5200F07E4C10D /* Build configuration list for PBXNativeTarget "MenuGit" */;
 			buildPhases = (
 				DE65E65D08C732566C32F7CB /* Sources */,
+				C565BDD7589B4EEA4D3C75B7 /* Resources */,
 				2541350A6D5B8FE399CED646 /* Frameworks */,
 				90CB627B7B11F31D46224B42 /* Embed Foundation Extensions */,
 				B0970971409A41DD2A6E1ACA /* Embed Frameworks */,
@@ -247,6 +259,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C565BDD7589B4EEA4D3C75B7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AC99D5917AF79544F40F917E /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		7392DC88BD8417741E362FC4 /* Sources */ = {
