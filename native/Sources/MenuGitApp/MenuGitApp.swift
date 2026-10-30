@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var suppressUntilReveal = true
     private var fallbackTimer: Timer?
     private var layoutTimer: Timer?
+    private var installTimer: Timer?
     private var awaitingLayout = false
     private var appearBaseline = 0
     private var screenAtHide = AppModel.Screen.welcome
@@ -26,8 +27,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if bundleRemoved() {
+            unregisterIfRemoved()
+            NSApp.terminate(nil)
+            return
+        }
         suppressWindows()
         scheduleFallback(0.6)
+        startInstallWatch()
+    }
+
+    private func startInstallWatch() {
+        let timer = Timer(timeInterval: 1, target: self, selector: #selector(installWatchTick), userInfo: nil, repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+        installTimer = timer
+    }
+
+    @objc private func installWatchTick() {
+        guard bundleRemoved() else { return }
+        unregisterIfRemoved()
+        NSApp.terminate(nil)
+    }
+
+    private func bundleRemoved() -> Bool {
+        let path = Bundle.main.bundlePath
+        return path.contains("/.Trash/") || !FileManager.default.fileExists(atPath: path)
+    }
+
+    private func unregisterIfRemoved() {
+        guard bundleRemoved() else { return }
+        installTimer?.invalidate()
+        installTimer = nil
+        let appex = Bundle.main.bundleURL.appendingPathComponent("Contents/PlugIns/MenuGitFinder.appex")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/pluginkit")
+        process.arguments = ["-r", appex.path]
+        try? process.run()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

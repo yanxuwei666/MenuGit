@@ -6,10 +6,17 @@ final class FinderSync: FIFinderSync {
     private var controller: FIFinderSyncController { .default() }
     private var requests: [Int: Request] = [:]
     private var nextTag = 0
+    private var removalTimer: Timer?
     private struct Request { let action: String; let target: URL; let items: [URL] }
+
+    private var isInstalled: Bool {
+        let path = Bundle.main.bundleURL.path
+        return !path.contains("/.Trash/") && FileManager.default.fileExists(atPath: path)
+    }
 
     override init() {
         super.init()
+        startRemovalWatch()
         var roots: Set<URL> = [URL(fileURLWithPath: "/Volumes", isDirectory: true), URL(fileURLWithPath: "/private/tmp", isDirectory: true)]
         if let account = getpwuid(getuid()), let home = account.pointee.pw_dir {
             let path = String(cString: home)
@@ -19,7 +26,21 @@ final class FinderSync: FIFinderSync {
         controller.directoryURLs = roots
     }
 
+    private func startRemovalWatch() {
+        let timer = Timer(timeInterval: 1, target: self, selector: #selector(removalTick), userInfo: nil, repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+        removalTimer = timer
+    }
+
+    @objc private func removalTick() {
+        guard !isInstalled else { return }
+        removalTimer?.invalidate()
+        removalTimer = nil
+        exit(0)
+    }
+
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
+        guard isInstalled else { return nil }
         let selected = (controller.selectedItemURLs() ?? []).map { ($0 as NSURL).filePathURL ?? $0 }
         let targeted = controller.targetedURL().map { ($0 as NSURL).filePathURL ?? $0 }
         let target: URL?
