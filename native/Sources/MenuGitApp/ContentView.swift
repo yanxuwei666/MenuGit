@@ -658,9 +658,11 @@ struct CommitView: View {
     }
 
     private func visibleLines(_ lines: [DiffLine]) -> [DiffLine] {
-        lines.filter { line in
+        let metadata = ["diff ", "index ", "--- ", "+++ ", "new file mode", "deleted file mode",
+                        "old mode", "new mode", "similarity index", "rename from", "rename to"]
+        return lines.filter { line in
             guard line.kind == .header else { return true }
-            return line.text.hasPrefix("@@") || line.text.hasPrefix("Binary files")
+            return !metadata.contains(where: { line.text.hasPrefix($0) })
         }
     }
 

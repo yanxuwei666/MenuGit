@@ -187,7 +187,11 @@ final class AppModel: ObservableObject {
         case .pull: syncRemoteBranchOptions()
         case .conflicts:
             Task { await loadConflicts(); if let path = firstConflictPath() { await loadConflict(path) } }
-        case .commit: if let selectedFile { Task { await loadPreview(selectedFile) } }
+        case .commit:
+            if selectedFile == nil, let files = status?.files, !files.isEmpty {
+                selectedFile = files.first(where: { selected.contains($0.path) })?.path ?? files.first?.path
+            }
+            if let selectedFile { Task { await loadPreview(selectedFile) } }
         default: break
         }
     }
@@ -200,8 +204,14 @@ final class AppModel: ObservableObject {
             }.value
             status = data.0; localBranches = data.1; remoteBranches = data.2; remotes = data.3
             selected = selected.intersection(Set(data.0.files.map(\.path)))
-            if let path = selectedFile, !data.0.files.contains(where: { $0.path == path }) {
-                selectedFile = nil; preview = .unavailable("点击左侧文件查看差异。")
+            if data.0.files.isEmpty {
+                selectedFile = nil
+                preview = .unavailable("工作区没有待提交的变更。")
+            } else {
+                if selectedFile == nil || !data.0.files.contains(where: { $0.path == selectedFile }) {
+                    selectedFile = data.0.files.first(where: { selected.contains($0.path) })?.path ?? data.0.files.first?.path
+                }
+                if let selectedFile { await loadPreview(selectedFile) }
             }
             if data.0.conflictedOperation != nil { await loadConflicts() }
         } catch { show(error) }
@@ -214,7 +224,14 @@ final class AppModel: ObservableObject {
     }
 
     func selectFile(_ path: String) { selectedFile = path; Task { await loadPreview(path) } }
-    func toggle(_ path: String) { if selected.contains(path) { selected.remove(path) } else { selected.insert(path) } }
+    func toggle(_ path: String) {
+        if selected.contains(path) {
+            selected.remove(path)
+        } else {
+            selected.insert(path)
+            selectFile(path)
+        }
+    }
     func selectAll(_ on: Bool) {
         guard let status else { return }
         if on { selected = Set(status.files.filter { !$0.hasConflict }.map(\.path)) } else { selected.removeAll() }

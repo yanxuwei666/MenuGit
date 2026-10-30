@@ -141,8 +141,9 @@ final class SpecComplianceTests: XCTestCase {
     func testDiffPreviewUntrackedAndBinary() throws {
         try write("new.txt", "one\ntwo\n")
         guard case let .text(sections) = try repository.diffPreview(path: "new.txt") else { return XCTFail("expected text preview") }
-        XCTAssertEqual(sections.first?.lines.map(\.text), ["one", "two", ""])
-        XCTAssertTrue(sections.flatMap(\.lines).allSatisfy { $0.kind == .added })
+        XCTAssertEqual(sections.first?.lines.map(\.text), ["新文件", "+one", "+two"])
+        XCTAssertEqual(sections.first?.lines.first?.kind, .header)
+        XCTAssertTrue(sections.first?.lines.dropFirst().allSatisfy { $0.kind == .added } == true)
         try Data([0, 1, 2, 3]).write(to: directory.appendingPathComponent("image.bin"))
         guard case .binary = try repository.diffPreview(path: "image.bin") else { return XCTFail("expected binary preview") }
     }

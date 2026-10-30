@@ -32,7 +32,10 @@ public extension GitRepository {
                   let size = (attributes[.size] as? NSNumber)?.intValue else { return .unavailable("文件已不存在。") }
             guard size <= Self.previewByteLimit else { return .tooLarge }
             guard let data = try? Data(contentsOf: url), !data.contains(0), let text = String(data: data, encoding: .utf8) else { return .binary }
-            return .text([DiffSection(title: "新增文件", lines: text.components(separatedBy: "\n").map { DiffLine(kind: .added, text: $0) })])
+            var raw = text.components(separatedBy: "\n")
+            if raw.last == "" { raw.removeLast() }
+            let lines = [DiffLine(kind: .header, text: "新文件")] + raw.map { DiffLine(kind: .added, text: "+" + $0) }
+            return .text([DiffSection(title: "新增文件", lines: lines)])
         }
         let stagedStat = try git.require(["diff", "--cached", "--numstat", "--no-ext-diff", "--", path], at: root).output
         let workingStat = try git.require(["diff", "--numstat", "--no-ext-diff", "--", path], at: root).output
