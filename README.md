@@ -32,8 +32,8 @@ macOS 上的 Git 右键菜单工具 —— 类似 TortoiseGit 的简化版。
 
 ## 安装
 
-1. 从 [Releases](https://github.com/yanxuwei666/MenuGit/releases) 下载最新的 `MenuGit-v0.1.0.zip`。
-2. 解压后把 `MenuGit.app` 拖进 `/Applications`。
+1. 从 [Releases](https://github.com/yanxuwei666/MenuGit/releases) 下载最新的 `MenuGit-v0.1.0.dmg`。
+2. 双击打开 DMG，把 `MenuGit.app` 拖进 `Applications` 文件夹。
 3. 首次启动：本项目没有 Apple Developer 签名和公证，双击会被 Gatekeeper 拦截。请按住 Control 点击图标选择“打开”，或在终端执行一次：
 
    ```bash
