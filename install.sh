@@ -12,9 +12,12 @@ fail() { printf '错误：%s\n' "$*" >&2; exit 1; }
 VERSION="${MENUGIT_VERSION:-}"
 if [ -z "$VERSION" ]; then
     info "正在查询最新版本…"
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-        | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
-    [ -n "$VERSION" ] || fail "无法获取最新版本，请检查网络，或设置 MENUGIT_VERSION=v0.1.1 后重试。"
+    LATEST_URL=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest" || true)
+    VERSION="${LATEST_URL##*/}"
+    case "$VERSION" in
+        v[0-9]*) ;;
+        *) fail "无法获取最新版本，请检查网络，或设置 MENUGIT_VERSION=v0.1.1 后重试。" ;;
+    esac
 fi
 
 DMG_URL="https://github.com/$REPO/releases/download/$VERSION/MenuGit-$VERSION.dmg"
