@@ -36,9 +36,9 @@ struct MenuGitApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel.shared
     var body: some Scene {
-        WindowGroup("MenuGit") {
+        Window("MenuGit", id: "main") {
             ContentView(model: model)
-                .frame(minWidth: 820, minHeight: 540)
+                .frame(minWidth: 960, minHeight: 560)
         }
         .defaultSize(width: 1080, height: 760)
         .windowStyle(.titleBar)

@@ -128,7 +128,7 @@ public struct GitRepository: Sendable {
 
     public func branches() throws -> (local: [String], remote: [String]) {
         let local = try git.require(["for-each-ref", "--format=%(refname:short)", "refs/heads"], at: root).output.split(separator: "\n").map(String.init)
-        let remote = try git.require(["for-each-ref", "--format=%(refname:short)", "refs/remotes"], at: root).output.split(separator: "\n").map(String.init).filter { !$0.hasSuffix("/HEAD") }
+        let remote = try git.require(["for-each-ref", "--format=%(refname:short)", "refs/remotes"], at: root).output.split(separator: "\n").map(String.init).filter { $0.contains("/") && !$0.hasSuffix("/HEAD") }
         return (local, remote)
     }
 

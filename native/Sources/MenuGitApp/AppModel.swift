@@ -161,7 +161,7 @@ final class AppModel: ObservableObject {
                     if destination == .history { await loadHistory(reset: true) }
                     if destination == .push { await loadOutgoing() }
                 }
-                if let selectedFile { await loadPreview(selectedFile) }
+                if let selectedFile { await loadPreview(selectedFile) } else { preview = .unavailable("点击左侧文件查看差异。") }
             } catch { show(error) }
             busy = false
         }
@@ -200,6 +200,9 @@ final class AppModel: ObservableObject {
             }.value
             status = data.0; localBranches = data.1; remoteBranches = data.2; remotes = data.3
             selected = selected.intersection(Set(data.0.files.map(\.path)))
+            if let path = selectedFile, !data.0.files.contains(where: { $0.path == path }) {
+                selectedFile = nil; preview = .unavailable("点击左侧文件查看差异。")
+            }
             if data.0.conflictedOperation != nil { await loadConflicts() }
         } catch { show(error) }
     }

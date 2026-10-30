@@ -6,12 +6,21 @@ struct ContentView: View {
     @ObservedObject var model: AppModel
     var body: some View {
         VStack(spacing: 0) {
-            header
-            feedback
-            if model.busy { ProgressView().controlSize(.small).padding(6) }
-            content.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.busy)
+            titlebar
+            hairline
+            HStack(spacing: 0) {
+                sidebar.frame(width: 190)
+                Rectangle().fill(Theme.border).frame(width: 1)
+                VStack(spacing: 0) {
+                    feedback
+                    if model.busy { ProgressView().controlSize(.small).padding(6) }
+                    content.frame(maxWidth: .infinity, maxHeight: .infinity).disabled(model.busy)
+                }
+            }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Theme.panel)
+        .foregroundStyle(Theme.text)
+        .tint(Theme.accent)
     }
 
     @ViewBuilder private var content: some View {
@@ -54,68 +63,246 @@ struct ContentView: View {
         }.padding(.horizontal)
     }
 
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "point.3.connected.trianglepath.dotted").foregroundStyle(.blue)
-            Text(title).font(.headline)
-            if let status = model.status, model.repository != nil {
-                Text(status.branch).font(.caption).padding(.horizontal, 8).padding(.vertical, 3).background(.blue.opacity(0.12), in: Capsule())
-            }
-            if model.repository != nil { navigation }
-            Spacer()
-            if let path = model.repository?.root.path {
-                Text(path).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary).font(.caption)
-            }
-            headerActions
-        }.padding(14).background(.bar)
-    }
+    private var hairline: some View { Rectangle().fill(Theme.border).frame(height: 1) }
 
-    private var headerActions: some View {
+    private var titlebar: some View {
         HStack(spacing: 8) {
-            if model.status?.conflictedOperation != nil, model.screen != .conflicts {
-                Button(model.status?.files.contains(where: \.hasConflict) == true ? "解决冲突" : "完成\(model.status?.conflictedOperation == "rebase" ? "变基" : "合并")") { model.go(.conflicts) }.disabled(model.busy)
+            Text("MenuGit").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text)
+            if let repository = model.repository {
+                Text("— \(repository.root.lastPathComponent)")
+                    .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.muted)
+                if let branch = model.status?.branch, !branch.isEmpty {
+                    Text("· \(branch)").font(.system(size: 11)).foregroundStyle(Theme.muted)
+                        .lineLimit(1).truncationMode(.middle)
+                }
             }
-            Button("打开仓库") { model.chooseFolder() }.disabled(model.busy)
+            Spacer()
+            if model.status?.conflictedOperation != nil, model.screen != .conflicts {
+                Button(model.status?.files.contains(where: \.hasConflict) == true ? "解决冲突" : "完成\(model.status?.conflictedOperation == "rebase" ? "变基" : "合并")") {
+                    model.go(.conflicts)
+                }.buttonStyle(QuietButtonStyle()).disabled(model.busy)
+            }
+            Button("打开仓库…") { model.chooseFolder() }
+                .buttonStyle(QuietButtonStyle()).disabled(model.busy)
             Button {
                 model.refreshExtensionStatus()
                 model.screen = .settings
             } label: {
-                Image(systemName: "gearshape")
-            }.help("设置")
+                Image(systemName: "gearshape").font(.system(size: 12))
+            }
+            .buttonStyle(QuietButtonStyle()).help("设置")
         }
+        .padding(.horizontal, 14)
+        .frame(height: 45)
+        .background(Theme.titlebar)
     }
 
-    private var navigation: some View {
-        Picker("", selection: navigationBinding) {
-            Text("提交").tag(AppModel.Screen.commit)
-            Text("推送").tag(AppModel.Screen.push)
-            Text("拉取").tag(AppModel.Screen.pull)
-            Text("分支").tag(AppModel.Screen.branches)
-            Text("日志").tag(AppModel.Screen.history)
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            repoCard
+            navLabel("仓库")
+            navItem("更改", icon: "pencil", screen: .commit, count: model.status?.files.count ?? 0)
+            navItem("分支", icon: "arrow.triangle.branch", screen: .branches)
+            navItem("历史", icon: "clock", screen: .history)
+            navLabel("同步")
+            navItem("推送", icon: "arrow.up", screen: .push, count: model.outgoingCommits.count)
+            navItem("拉取", icon: "arrow.down", screen: .pull)
+            Spacer(minLength: 10)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            Button { model.screen = .create } label: { navContent("新建仓库", icon: "plus") }
+                .buttonStyle(SidebarButtonStyle())
+            Button { model.screen = .clone } label: { navContent("克隆仓库", icon: "square.on.square") }
+                .buttonStyle(SidebarButtonStyle())
+            Button {
+                model.refreshExtensionStatus()
+                model.screen = .settings
+            } label: { navContent("设置", icon: "gearshape") }
+            .buttonStyle(SidebarButtonStyle(active: model.screen == .settings))
         }
-        .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 340)
+        .padding(.horizontal, 9)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .background(Theme.sidebar)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    private var navigationBinding: Binding<AppModel.Screen> {
-        Binding(get: { model.screen }, set: { model.go($0) })
+    private var repoCard: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: "internaldrive").font(.system(size: 10))
+                Text(model.repository?.root.lastPathComponent ?? "未打开仓库")
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Theme.text)
+            Text(repoPathHint)
+                .font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                .lineLimit(1).truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 7))
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.hairline, lineWidth: 1))
+        .padding(.horizontal, 2)
+        .padding(.bottom, 15)
     }
 
-    private var title: String {
-        switch model.screen {
-        case .welcome: return "MenuGit"
-        case .commit: return "提交"
-        case .push: return "推送"
-        case .pull: return "拉取"
-        case .branches: return "分支"
-        case .history: return "日志"
-        case .create: return "创建仓库"
-        case .clone: return "克隆"
-        case .settings: return "设置"
-        case .conflicts:
-            guard let operation = model.status?.conflictedOperation else { return "解决冲突" }
-            if model.status?.files.contains(where: \.hasConflict) == true { return "解决冲突" }
-            return operation == "rebase" ? "完成变基" : "完成合并"
+    private var repoPathHint: String {
+        guard let root = model.repository?.root else { return "从 Finder 右键或下方打开" }
+        let parent = root.deletingLastPathComponent().path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return parent.hasPrefix(home) ? "~" + parent.dropFirst(home.count) : parent
+    }
+
+    private func navLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium))
+            .tracking(0.5)
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+    }
+
+    private func navItem(_ label: String, icon: String, screen: AppModel.Screen, count: Int = 0) -> some View {
+        let active = model.screen == screen
+        return Button { model.go(screen) } label: { navContent(label, icon: icon, count: count, active: active) }
+            .buttonStyle(SidebarButtonStyle(active: active))
+            .disabled(model.repository == nil)
+    }
+
+    private func navContent(_ label: String, icon: String, count: Int = 0, active: Bool = false) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon).font(.system(size: 10.5)).frame(width: 14)
+            Text(label).font(.system(size: 11, weight: active ? .semibold : .regular))
+            Spacer(minLength: 0)
+            if count > 0 {
+                Text("\(count)")
+                    .font(.system(size: 9, weight: .semibold))
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(Theme.navCount, in: Capsule())
+                    .foregroundStyle(Theme.muted)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct PageHeading<Trailing: View>: View {
+    let title: String
+    let subtitle: String
+    let trailing: Trailing
+
+    init(_ title: String, subtitle: String, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.subtitle = subtitle
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.text)
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(.system(size: 10)).foregroundStyle(Theme.muted)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 11)
+    }
+}
+
+extension PageHeading where Trailing == EmptyView {
+    init(_ title: String, subtitle: String) {
+        self.init(title, subtitle: subtitle, trailing: { EmptyView() })
+    }
+}
+
+struct QuietButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.muted)
+            .padding(.horizontal, 9).padding(.vertical, 5)
+            .background(configuration.isPressed ? Theme.rowHover : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(Rectangle())
+    }
+}
+
+struct OutlineButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 12).padding(.vertical, 5)
+            .background(configuration.isPressed ? Theme.rowHover : Theme.panel, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(Rectangle())
+    }
+}
+
+struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 13).padding(.vertical, 6)
+            .background(Theme.accent.opacity(configuration.isPressed ? 0.85 : 1), in: RoundedRectangle(cornerRadius: 6))
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(Rectangle())
+    }
+}
+
+struct SidebarButtonStyle: ButtonStyle {
+    var active = false
+    @Environment(\.isEnabled) private var isEnabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(active ? Theme.navActive : Theme.sidebarText)
+            .padding(.horizontal, 9).padding(.vertical, 7)
+            .background(active ? Theme.navActiveBackground : (configuration.isPressed ? Theme.rowHover : .clear), in: RoundedRectangle(cornerRadius: 6))
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(Rectangle())
+    }
+}
+
+struct MenuGitField: View {
+    let placeholder: String
+    @Binding var text: String
+    var width: CGFloat? = nil
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 11))
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .frame(width: width)
+            .background(Theme.panel, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+    }
+}
+
+struct SectionCard<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.muted)
+                .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
     }
 }
 
@@ -136,293 +323,744 @@ struct Banner: View {
 struct WelcomeView: View {
     @ObservedObject var model: AppModel
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "folder.badge.gearshape").font(.system(size: 42)).foregroundStyle(.blue)
-            Text("从 Finder 右键使用 MenuGit").font(.title2.bold())
-            Text("也可以在下方选择最近仓库或打开本地仓库。").foregroundStyle(.secondary)
-            HStack(spacing: 10) {
-                Button("打开仓库") { model.chooseFolder() }.buttonStyle(.borderedProminent)
-                Button("设置") { model.refreshExtensionStatus(); model.screen = .settings }
-            }
-            if !model.recentRepositories.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("最近仓库").font(.headline)
-                        Spacer()
-                        Button("清除") { model.clearRecent() }.buttonStyle(.link)
-                    }.padding(.bottom, 6)
-                    ForEach(model.recentRepositories, id: \.self) { url in
-                        Button { model.open(url) } label: {
-                            HStack {
-                                Image(systemName: "folder").foregroundStyle(.secondary)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(url.lastPathComponent)
-                                    Text(url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                                }
-                                Spacer()
-                            }.contentShape(Rectangle()).padding(.vertical, 5)
-                        }.buttonStyle(.plain)
-                        Divider()
+        VStack(spacing: 0) {
+            PageHeading("开始使用", subtitle: "打开本地仓库，或从 Finder 右键使用 MenuGit")
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            ScrollView {
+                VStack(spacing: 16) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "folder.badge.gearshape")
+                            .font(.system(size: 30, weight: .light)).foregroundStyle(Theme.accent)
+                        Text("从 Finder 右键使用 MenuGit").font(.system(size: 14, weight: .semibold))
+                        Text("也可以在下方打开本地仓库，或创建、克隆一个仓库。")
+                            .font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                        HStack(spacing: 8) {
+                            Button("打开仓库…") { model.chooseFolder() }.buttonStyle(PrimaryButtonStyle())
+                            Button("新建仓库") { model.screen = .create }.buttonStyle(OutlineButtonStyle())
+                            Button("克隆仓库") { model.screen = .clone }.buttonStyle(OutlineButtonStyle())
+                        }.padding(.top, 4)
                     }
-                }.frame(maxWidth: 460).padding(.top, 8)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 26)
+                    .background(Theme.panel, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+
+                    if !model.recentRepositories.isEmpty {
+                        SectionCard(title: "最近仓库") {
+                            VStack(spacing: 0) {
+                                ForEach(Array(model.recentRepositories.enumerated()), id: \.element) { index, url in
+                                    if index > 0 { Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 34) }
+                                    Button { model.open(url) } label: {
+                                        HStack(spacing: 9) {
+                                            Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(Theme.muted)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(url.lastPathComponent).font(.system(size: 11, weight: .medium))
+                                                Text(displayPath(url)).font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                                                    .lineLimit(1).truncationMode(.middle)
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding(.horizontal, 12).padding(.vertical, 7)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 34)
+                                HStack {
+                                    Text("\(model.recentRepositories.count) 个仓库").font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                                    Spacer()
+                                    Button("清除") { model.clearRecent() }.buttonStyle(QuietButtonStyle())
+                                }.padding(.horizontal, 12).padding(.vertical, 4)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 6) {
+                        Circle().fill(model.extensionEnabled ? Color.green : Color.orange).frame(width: 6, height: 6)
+                        Text("Finder 扩展\(model.extensionEnabled ? "已启用" : "尚未启用")")
+                        if !model.extensionEnabled {
+                            Button("去启用") { model.refreshExtensionStatus(); model.screen = .settings }
+                                .buttonStyle(QuietButtonStyle())
+                        }
+                    }
+                    .font(.system(size: 10)).foregroundStyle(Theme.muted)
+                }
+                .frame(maxWidth: 520)
+                .frame(maxWidth: .infinity)
+                .padding(18)
             }
-            Spacer()
-            Text("Finder 扩展：\(model.extensionEnabled ? "已启用" : "尚未启用")")
-                .font(.caption).foregroundStyle(model.extensionEnabled ? .green : .orange)
-        }.padding(24)
+        }
+    }
+
+    private func displayPath(_ url: URL) -> String {
+        let path = url.deletingLastPathComponent().path
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+}
+
+enum Theme {
+    static let accent = dynamic(0x1677E8, 0x4A9BFF)
+    static let text = dynamic(0x303540, 0xE4E7EC)
+    static let muted = dynamic(0x8B929E, 0x8E959F)
+    static let border = dynamic(0xE1E4E9, 0x3C424B)
+    static let hairline = dynamic(0xECEEF1, 0x333840)
+    static let chrome = dynamic(0xF3F5F8, 0x2C3138)
+    static let panel = dynamic(0xFCFCFD, 0x262A31)
+    static let titlebar = dynamic(0xF7F7F8, 0x2A2E35)
+    static let sidebar = dynamic(0xF8F9FB, 0x24282E)
+    static let sidebarText = dynamic(0x5D6572, 0xC3C9D2)
+    static let navActive = dynamic(0x176BC4, 0x8CC2FF)
+    static let navActiveBackground = dynamic(0xE8F2FF, 0x1F3A5C)
+    static let navCount = dynamic(0xE4E7EC, 0x3A3F47)
+    static let rowHover = dynamic(0xF6F8FB, 0x30353D)
+    static let rowSelected = dynamic(0xEAF3FF, 0x1F3A5C)
+    static let diff = dynamic(0xFAFBFD, 0x21252B)
+    static let addedText = dynamic(0x23643D, 0x7FD1A0)
+    static let addedBackground = dynamic(0xEAF6EE, 0x1B3324)
+    static let removedText = dynamic(0xA53C35, 0xF09A93)
+    static let removedBackground = dynamic(0xFFF0EF, 0x3A2421)
+    static let hunkText = dynamic(0x5375A2, 0x8DB4E2)
+    static let hunkBackground = dynamic(0xEEF4FC, 0x243040)
+
+    private static func dynamic(_ light: UInt32, _ dark: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? rgb(dark) : rgb(light)
+        })
+    }
+    private static func rgb(_ value: UInt32) -> NSColor {
+        NSColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255, blue: CGFloat(value & 0xFF) / 255, alpha: 1)
+    }
+}
+
+struct FileStatusTag: View {
+    let file: ChangedFile
+    var body: some View {
+        Text(symbol)
+            .font(.system(size: 9.5, weight: .bold, design: .rounded))
+            .foregroundStyle(tone)
+            .frame(width: 17, height: 16)
+            .background(tone.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
+    }
+    private var symbol: String {
+        if file.hasConflict { return "!" }
+        if file.isRename { return "R" }
+        if file.isUntracked { return "?" }
+        if file.isNew { return "A" }
+        if file.indexStatus == "D" || file.worktreeStatus == "D" { return "D" }
+        return "M"
+    }
+    private var tone: Color {
+        switch symbol {
+        case "?": return Theme.muted
+        case "A": return .green
+        case "D", "!": return .red
+        case "R": return .purple
+        default: return Theme.accent
+        }
     }
 }
 
 struct CommitView: View {
     @ObservedObject var model: AppModel
-    private var selectable: [ChangedFile] { (model.status?.files ?? []).filter { !$0.hasConflict } }
+    @State private var hovered: String?
+
+    private var files: [ChangedFile] { model.status?.files ?? [] }
+    private var selectable: [ChangedFile] { files.filter { !$0.hasConflict } }
     private var allSelected: Bool { !selectable.isEmpty && selectable.allSatisfy { model.selected.contains($0.path) } }
-    private var partialSelected: Bool { (model.status?.files ?? []).contains { model.selected.contains($0.path) && $0.isPartiallyStaged } }
-    private var longFirstLine: Bool { (model.message.split(separator: "\n", omittingEmptySubsequences: false).first?.count ?? 0) > 50 }
+    private var partialSelected: Bool { files.contains { model.selected.contains($0.path) && $0.isPartiallyStaged } }
+    private var firstLineTooLong: Bool { (model.message.split(separator: "\n", omittingEmptySubsequences: false).first?.count ?? 0) > 50 }
+    private var canCommit: Bool { !model.selected.isEmpty && !model.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !model.identityMissing }
+    private var branch: String { model.status?.branch ?? "" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("选择本次提交的文件；选中文件以工作区当前内容提交，未选文件的已暂存内容会保留。")
-                .font(.caption).foregroundStyle(.secondary)
-            Text("范围：\(model.commitScope)").font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            heading
+            hairline
             if model.identityMissing {
                 Banner(text: "尚未配置 Git 提交身份。请先在终端配置 user.name 和 user.email。", color: .orange, actionTitle: "重新检查", action: model.checkIdentity)
             }
             if partialSelected {
                 Banner(text: "所选文件同时包含已暂存和未暂存修改，将提交工作区当前完整内容。", color: .orange)
             }
-            HSplitView {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Toggle("全选", isOn: Binding(get: { allSelected }, set: { model.selectAll($0) })).toggleStyle(.checkbox)
-                        Spacer()
-                        Text("已选 \(model.selected.count) / \(model.status?.files.count ?? 0) 项").foregroundStyle(.secondary).font(.caption)
-                    }
-                    List(model.status?.files ?? []) { file in
-                        HStack {
-                            Toggle("", isOn: Binding(get: { model.selected.contains(file.path) }, set: { _ in model.toggle(file.path) })).labelsHidden().disabled(file.hasConflict)
-                            Button { model.selectFile(file.path) } label: {
-                                HStack {
-                                    Text(file.label).font(.caption).foregroundStyle(color(for: file))
-                                    Text(file.path).lineLimit(1).truncationMode(.middle)
-                                    Spacer()
-                                    if file.isPartiallyStaged { Text("部分暂存").font(.caption).foregroundStyle(.orange) }
-                                }
-                            }.buttonStyle(.plain)
-                        }
-                    }
-                    if let status = model.status, status.files.isEmpty {
-                        Text("工作区干净，没有可提交的变更。").foregroundStyle(.secondary).padding(.vertical, 8)
-                    }
-                }.frame(minWidth: 280)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text(model.selectedFile ?? "差异").font(.headline).lineLimit(1).truncationMode(.middle)
-                        Spacer()
-                        Button("用默认应用打开") { model.openSelectedFile() }.disabled(model.selectedFile == nil)
-                    }
-                    DiffPreviewView(preview: model.preview) { model.openSelectedFile() }
-                }.frame(minWidth: 300)
+            if files.isEmpty { emptyState } else { changes }
+            hairline
+            commitBar
+        }
+        .task { await model.loadOutgoing() }
+    }
+
+    private var hairline: some View {
+        Rectangle().fill(Theme.hairline).frame(height: 1)
+    }
+
+    private var heading: some View {
+        PageHeading("更改", subtitle: "\(branch) · \(files.count) 个文件变更 · \(model.commitScope)") {
+            HStack(spacing: 4) {
+                Text(syncLabel).font(.system(size: 10)).foregroundStyle(syncTone)
+                Button("↓ 拉取") { model.go(.pull) }.buttonStyle(QuietButtonStyle())
+                Button("↑ 推送") { model.go(.push) }.buttonStyle(QuietButtonStyle())
             }
-            Text("提交信息").font(.headline)
-            TextEditor(text: $model.message).font(.body).frame(height: 80).border(Color.secondary.opacity(0.25))
-            if longFirstLine { Text("首行较长，建议精简到 50 字符以内（不强制）。").font(.caption).foregroundStyle(.orange) }
-            HStack {
-                Text("提交只保存到本地，之后需要确认推送。").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var syncLabel: String {
+        guard let upstream = model.status?.upstream else { return "尚未设置上游" }
+        let ahead = model.outgoingCommits.count
+        return ahead > 0 ? "领先 \(upstream) \(ahead) 个提交" : "没有待推送的提交"
+    }
+    private var syncTone: Color { model.outgoingCommits.isEmpty ? Theme.muted : .green }
+
+    private var emptyState: some View {
+        VStack(spacing: 7) {
+            Image(systemName: "checkmark.circle").font(.system(size: 28, weight: .light)).foregroundStyle(.green)
+            Text("工作区干净").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.text)
+            Text(emptyHint).font(.system(size: 11)).foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center).frame(maxWidth: 420)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyHint: String {
+        guard let upstream = model.status?.upstream else { return "尚未设置上游，等待下一次修改" }
+        if model.outgoingCommits.count > 0 {
+            return "领先 \(upstream) \(model.outgoingCommits.count) 个提交，切换到「推送」即可发布"
+        }
+        return "与 \(upstream) 同步，等待下一次修改"
+    }
+
+    private var changes: some View {
+        HSplitView {
+            changeList.frame(minWidth: 260, idealWidth: 330)
+            diffPane.frame(minWidth: 320)
+        }
+    }
+
+    private var changeList: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Toggle(isOn: Binding(get: { allSelected }, set: { model.selectAll($0) })) {
+                    Text("选择要提交的文件").font(.system(size: 11, weight: .medium))
+                }
+                .toggleStyle(.checkbox).disabled(selectable.isEmpty)
                 Spacer()
-                Button("提交") { model.commit() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.selected.isEmpty || model.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.identityMissing)
+                Text("已选 \(model.selected.count) / \(files.count)").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
             }
-        }.padding(16)
-    }
-
-    private func color(for file: ChangedFile) -> Color {
-        if file.hasConflict { return .red }
-        if file.isUntracked { return .secondary }
-        if file.isRename { return .purple }
-        return .blue
-    }
-}
-
-struct DiffPreviewView: View {
-    let preview: DiffPreview
-    let onOpen: () -> Void
-
-    @ViewBuilder var body: some View {
-        switch preview {
-        case .text(let sections):
-            ScrollView([.vertical, .horizontal]) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(sections) { section in
-                        Text(section.title).font(.caption.bold()).foregroundStyle(.secondary).padding(.vertical, 3)
-                        ForEach(Array(section.lines.enumerated()), id: \.offset) { _, line in
-                            Text(line.text.isEmpty ? " " : line.text)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(foreground(line.kind))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(background(line.kind))
-                        }
-                        Divider()
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            hairline
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(files) { file in
+                        fileRow(file)
                     }
-                }.padding(8).textSelection(.enabled)
+                }.padding(6)
+            }
+        }
+    }
+
+    private func fileRow(_ file: ChangedFile) -> some View {
+        HStack(spacing: 8) {
+            Toggle("", isOn: Binding(get: { model.selected.contains(file.path) }, set: { _ in model.toggle(file.path) }))
+                .labelsHidden().toggleStyle(.checkbox).disabled(file.hasConflict)
+            FileStatusTag(file: file)
+            Text(file.path)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(file.hasConflict ? Color.red : Theme.text)
+                .lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 4)
+            if file.isPartiallyStaged {
+                Text("部分暂存").font(.system(size: 9.5)).foregroundStyle(.orange)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(rowBackground(for: file.path), in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onTapGesture { model.selectFile(file.path) }
+        .onHover { inside in
+            if inside { hovered = file.path } else if hovered == file.path { hovered = nil }
+        }
+    }
+
+    private func rowBackground(for path: String) -> Color {
+        if model.selectedFile == path { return Theme.rowSelected }
+        return hovered == path ? Theme.rowHover : .clear
+    }
+
+    private var diffPane: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text(model.selectedFile ?? "差异预览")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.text)
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer()
+                if let file = files.first(where: { $0.path == model.selectedFile }) {
+                    Text(file.label).font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                }
+                Button { model.openSelectedFile() } label: {
+                    Image(systemName: "arrow.up.forward.app").font(.system(size: 10.5))
+                }
+                .buttonStyle(.plain).foregroundStyle(Theme.muted)
+                .help("用默认应用打开").disabled(model.selectedFile == nil)
+            }
+            .padding(.horizontal, 9).padding(.vertical, 6)
+            .background(Theme.chrome)
+            Rectangle().fill(Theme.border).frame(height: 1)
+            diffBody
+        }
+        .background(Theme.diff)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+        .padding(10)
+    }
+
+    @ViewBuilder private var diffBody: some View {
+        switch model.preview {
+        case .text(let sections):
+            GeometryReader { geo in
+                ScrollView([.vertical, .horizontal]) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(sections) { section in
+                            if sections.count > 1 {
+                                Text(section.title)
+                                    .font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.muted)
+                                    .padding(.horizontal, 9).padding(.vertical, 3)
+                                    .frame(minWidth: geo.size.width, alignment: .leading)
+                                    .background(Theme.chrome.opacity(0.7))
+                            }
+                            ForEach(Array(visibleLines(section.lines).enumerated()), id: \.offset) { _, line in
+                                diffRow(line, minWidth: geo.size.width)
+                            }
+                        }
+                    }
+                    .textSelection(.enabled)
+                }
             }
         case .binary:
-            VStack(alignment: .leading, spacing: 10) {
-                Text("二进制文件，不在应用内渲染差异。").foregroundStyle(.secondary)
-                Button("在默认应用中打开", action: onOpen)
-                Spacer()
-            }.padding(8)
+            unavailable("二进制文件，不在应用内渲染差异。", showOpen: true)
         case .tooLarge:
-            VStack(alignment: .leading, spacing: 10) {
-                Text("差异过大，未在应用内完整渲染。").foregroundStyle(.secondary)
-                Button("在默认应用中打开", action: onOpen)
-                Spacer()
-            }.padding(8)
+            unavailable("差异过大，未在应用内完整渲染。", showOpen: true)
         case .unavailable(let message):
-            Text(message).foregroundStyle(.secondary).padding(8)
+            unavailable(message, showOpen: false)
         }
     }
 
-    private func foreground(_ kind: DiffLine.Kind) -> Color {
-        switch kind { case .added: return .green; case .removed: return .red; case .header: return .secondary; case .context: return .primary }
+    private func diffRow(_ line: DiffLine, minWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Text(line.text.isEmpty ? " " : line.text)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(tone(for: line.kind).text)
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 9)
+        .frame(minWidth: minWidth, alignment: .leading)
+        .background(tone(for: line.kind).background)
     }
-    private func background(_ kind: DiffLine.Kind) -> Color {
-        switch kind { case .added: return .green.opacity(0.12); case .removed: return .red.opacity(0.12); default: return .clear }
-    }
-}
 
-struct CodePane: View {
-    let lines: [String]
-    let startLine: Int
-    var body: some View {
-        ScrollView([.vertical, .horizontal]) {
-            VStack(alignment: .leading, spacing: 1) {
-                ForEach(Array(lines.enumerated()), id: \.offset) { offset, line in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("\(startLine + offset)").foregroundStyle(.secondary).frame(width: 44, alignment: .trailing)
-                        Text(line.isEmpty ? " " : line)
-                    }.font(.system(.caption, design: .monospaced))
+    private func visibleLines(_ lines: [DiffLine]) -> [DiffLine] {
+        lines.filter { line in
+            guard line.kind == .header else { return true }
+            return line.text.hasPrefix("@@") || line.text.hasPrefix("Binary files")
+        }
+    }
+
+    private func tone(for kind: DiffLine.Kind) -> (text: Color, background: Color) {
+        switch kind {
+        case .added: return (Theme.addedText, Theme.addedBackground)
+        case .removed: return (Theme.removedText, Theme.removedBackground)
+        case .header: return (Theme.hunkText, Theme.hunkBackground)
+        case .context: return (Theme.text, Theme.diff)
+        }
+    }
+
+    private func unavailable(_ message: String, showOpen: Bool) -> some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Text(message).font(.system(size: 11)).foregroundStyle(Theme.muted)
+            if showOpen { Button("在默认应用中打开") { model.openSelectedFile() } }
+            Spacer()
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var commitBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $model.message)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(3)
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+                if model.message.isEmpty {
+                    Text("提交信息（必填）")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        .padding(.top, 7).padding(.leading, 9)
+                        .allowsHitTesting(false)
                 }
-            }.padding(6).textSelection(.enabled)
+            }
+            .frame(height: 62)
+            HStack(spacing: 8) {
+                Text(authorNote).font(.system(size: 9.5)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
+                Spacer()
+                if firstLineTooLong {
+                    Text("首行建议不超过 50 字符（不强制）").font(.system(size: 9.5)).foregroundStyle(.orange)
+                }
+                Button("提交") { model.commit() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!canCommit)
+            }
         }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Theme.panel)
+    }
+
+    private var authorNote: String {
+        if let identity = model.identity { return "提交到 \(branch) · \(identity)" }
+        return "提交到 \(branch) · 作者来自系统 Git 配置"
     }
 }
 
 struct SyncView: View {
     @ObservedObject var model: AppModel
     let push: Bool
+
+    private var branch: String { model.status?.branch ?? "" }
+    private var ahead: Int { model.outgoingCommits.count }
     private var availableBranches: [String] {
         model.remoteBranches.filter { $0.hasPrefix(model.remote + "/") }
             .map { String($0.dropFirst(model.remote.count + 1)) }
     }
+    private var canRun: Bool { !model.displayTargetRemote.isEmpty && !model.displayTargetBranch.isEmpty }
+    private var subtitle: String {
+        guard model.hasUpstream else { return "\(branch) · 尚未设置上游" }
+        let target = "\(model.displayTargetRemote)/\(model.displayTargetBranch)"
+        return push ? "\(branch) → \(target)" : "\(target) → \(branch)"
+    }
+    private var stateText: String {
+        guard let upstream = model.status?.upstream else { return "尚未设置上游" }
+        if push { return ahead > 0 ? "领先 \(upstream) \(ahead) 个提交" : "与 \(upstream) 同步" }
+        return "从 \(upstream) 获取并合并到当前分支"
+    }
+    private var stateTone: Color { push && ahead > 0 ? Theme.addedText : Theme.muted }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if push, !model.lastCommit.isEmpty { Banner(text: "本地提交 \(model.lastCommit) 已创建；点击推送才会发送。", color: .green) }
+        VStack(spacing: 0) {
+            PageHeading(push ? "推送" : "拉取", subtitle: subtitle) {
+                if push, !model.lastCommit.isEmpty {
+                    Text("已创建本地提交 \(shortHash(model.lastCommit))")
+                        .font(.system(size: 10)).foregroundStyle(Theme.addedText)
+                }
+            }
+            hairline
             if model.remotes.isEmpty {
-                Text("尚未配置远端仓库").font(.headline)
-                Text("添加远端只会更改当前仓库。请使用系统 Git 凭证助手或 SSH 配置。").foregroundStyle(.secondary)
-                if push {
-                    TextField("远端名称", text: $model.newRemoteName)
-                    TextField("HTTPS 或 SSH 地址", text: $model.remoteAddress)
-                    Button("添加远端") { model.addRemote() }.disabled(model.remoteAddress.isEmpty)
-                } else {
-                    Text("需要先推送或手动配置远端后才能拉取。").font(.caption).foregroundStyle(.orange)
-                }
+                remoteSetup
             } else {
-                if model.hasUpstream {
-                    Text("目标：\(model.displayTargetRemote)/\(model.displayTargetBranch)").font(.headline)
-                    Text("当前分支已配置上游，操作直接使用该上游。").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Form {
-                        Picker("远端", selection: $model.remote) { ForEach(model.remotes, id: \.self) { Text($0).tag($0) } }
-                            .onChange(of: model.remote) { _ in model.syncRemoteBranchOptions() }
-                        if push {
-                            TextField("远端分支（不存在时创建）", text: $model.remoteBranch)
-                            Toggle("记住为当前分支的上游", isOn: $model.setUpstream)
-                        } else if availableBranches.isEmpty {
-                            Text("该远端没有可用分支，请先推送或刷新。").foregroundStyle(.orange)
-                        } else {
-                            Picker("远端分支", selection: $model.remoteBranch) {
-                                ForEach(availableBranches, id: \.self) { Text($0).tag($0) }
-                            }
+                syncBody
+                hairline
+                footer
+            }
+        }
+    }
+
+    private var hairline: some View { Rectangle().fill(Theme.hairline).frame(height: 1) }
+
+    private var syncBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionCard(title: "本地") {
+                    VStack(spacing: 0) {
+                        row("分支") { branchPill }
+                        hairline
+                        row("状态") {
+                            Text(stateText).font(.system(size: 10.5)).foregroundStyle(stateTone)
                         }
-                    }.formStyle(.grouped)
+                    }
+                    .padding(.bottom, 4)
                 }
-                Text(push ? "不会执行强制推送；推送失败时本地提交保留。" : "拉取遵循当前 Git 配置；遇到冲突时暂停。")
-                    .foregroundStyle(.secondary).font(.caption)
-                if push {
-                    Text("待推送提交（\(model.outgoingCommits.count)）").font(.headline)
-                    if model.outgoingCommits.isEmpty {
-                        Text("没有待推送提交。").font(.caption).foregroundStyle(.secondary)
-                    } else {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(model.outgoingCommits.prefix(20)) { commit in
-                                HStack(alignment: .top) {
-                                    Text(commit.id).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
-                                    Text(commit.subject).lineLimit(1)
-                                    Spacer()
-                                    Text(commit.author).font(.caption).foregroundStyle(.secondary)
+
+                SectionCard(title: push ? "目标" : "来源") {
+                    VStack(spacing: 0) {
+                        if model.hasUpstream {
+                            row("远端") { remotePill(model.displayTargetRemote) }
+                            hairline
+                            row("分支") {
+                                Text(model.displayTargetBranch)
+                                    .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.text)
+                            }
+                            cardHint("当前分支已配置上游，操作直接使用该上游。")
+                        } else {
+                            row("远端") {
+                                Menu {
+                                    ForEach(model.remotes, id: \.self) { name in
+                                        Button(name) {
+                                            model.remote = name
+                                            model.syncRemoteBranchOptions()
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Text(model.remote).font(.system(size: 10.5, weight: .medium))
+                                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+                                    }
+                                    .foregroundStyle(Theme.text)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Theme.chrome, in: Capsule())
+                                }
+                                .menuStyle(.borderlessButton)
+                                .menuIndicator(.hidden)
+                                .fixedSize()
+                            }
+                            hairline
+                            row("分支") {
+                                if push {
+                                    MenuGitField(placeholder: "远端分支（不存在时创建）", text: $model.remoteBranch, width: 230)
+                                } else if availableBranches.isEmpty {
+                                    Text("该远端没有可用分支，请先推送或刷新。")
+                                        .font(.system(size: 10.5)).foregroundStyle(.orange)
+                                } else {
+                                    Picker("", selection: $model.remoteBranch) {
+                                        ForEach(availableBranches, id: \.self) { Text($0).tag($0) }
+                                    }
+                                    .labelsHidden().pickerStyle(.menu).frame(width: 190, alignment: .leading)
                                 }
                             }
-                        }.padding(8).background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                            if push {
+                                hairline
+                                row("上游") {
+                                    Toggle("记住为当前分支的上游", isOn: $model.setUpstream)
+                                        .toggleStyle(.checkbox).font(.system(size: 10.5))
+                                }
+                            }
+                            cardHint(push
+                                     ? "默认推送到上游分支；目标在远端不存在时，将创建该远端分支并设为上游。"
+                                     : "拉取 = 获取并合并该远端分支到当前分支；产生冲突时会暂停并进入解决冲突流程。")
+                        }
                     }
                 }
-                if !model.resultLog.isEmpty {
-                    ScrollView { Text(model.resultLog).font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 100)
+
+                if push {
+                    SectionCard(title: "待推送提交（\(ahead)）") {
+                        if model.outgoingCommits.isEmpty {
+                            Text("没有待推送提交。")
+                                .font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                .padding(.horizontal, 12).padding(.bottom, 10)
+                        } else {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(model.outgoingCommits.prefix(30).enumerated()), id: \.element) { index, commit in
+                                        if index > 0 { hairline }
+                                        HStack(spacing: 8) {
+                                            Text(shortHash(commit.id))
+                                                .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.muted)
+                                                .frame(width: 54, alignment: .leading)
+                                            Text(commit.subject).font(.system(size: 10.5)).lineLimit(1)
+                                            Spacer(minLength: 6)
+                                            Text(commit.author).font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                                        }
+                                        .padding(.horizontal, 12).padding(.vertical, 6)
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 150)
+                            .padding(.bottom, 4)
+                        }
+                    }
                 }
-                HStack {
-                    Spacer()
-                    Button(push ? "推送" : "拉取") { push ? model.push() : model.pull() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.displayTargetRemote.isEmpty || model.displayTargetBranch.isEmpty)
+
+                if !model.resultLog.isEmpty {
+                    SectionCard(title: "Git 输出") {
+                        ScrollView {
+                            Text(model.resultLog)
+                                .font(.system(size: 9.5, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12).padding(.bottom, 8)
+                        }
+                        .frame(maxHeight: 110)
+                    }
+                }
+            }
+            .frame(maxWidth: 760)
+            .frame(maxWidth: .infinity)
+            .padding(16)
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Text("凭证来自系统 Git 配置").font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+            Spacer()
+            Button(push ? "推送" : "拉取") { push ? model.push() : model.pull() }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!canRun || model.busy)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Theme.panel)
+    }
+
+    private var remoteSetup: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: "externaldrive.badge.questionmark")
+                .font(.system(size: 26, weight: .light)).foregroundStyle(Theme.muted)
+            Text("尚未配置远端仓库").font(.system(size: 13, weight: .semibold))
+            Text(push
+                 ? "添加远端只会更改当前仓库；凭证来自系统 Git 凭证助手或 SSH 配置。"
+                 : "需要先推送或手动配置远端后才能拉取。")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+            if push {
+                HStack(spacing: 8) {
+                    MenuGitField(placeholder: "远端名称", text: $model.newRemoteName, width: 110)
+                    MenuGitField(placeholder: "HTTPS 或 SSH 地址", text: $model.remoteAddress)
+                }
+                .frame(maxWidth: 420)
+                Button("添加远端") { model.addRemote() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(model.remoteAddress.isEmpty || model.busy)
+            } else {
+                HStack(spacing: 8) {
+                    Button("去推送") { model.go(.push) }.buttonStyle(OutlineButtonStyle())
+                    Button("设置") { model.screen = .settings }.buttonStyle(OutlineButtonStyle())
                 }
             }
             Spacer()
-        }.padding(24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
     }
+
+    private func row(_ label: String, @ViewBuilder value: () -> some View) -> some View {
+        HStack(spacing: 10) {
+            Text(label).font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                .frame(width: 46, alignment: .leading)
+            value()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    private func cardHint(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+            .padding(.horizontal, 12).padding(.top, 2).padding(.bottom, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var branchPill: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "arrow.triangle.branch").font(.system(size: 9))
+            Text(branch).font(.system(size: 10.5, weight: .medium))
+        }
+        .foregroundStyle(Theme.navActive)
+        .padding(.horizontal, 8).padding(.vertical, 2)
+        .background(Theme.navActiveBackground, in: Capsule())
+    }
+
+    private func remotePill(_ name: String) -> some View {
+        Text(name)
+            .font(.system(size: 10.5, weight: .medium)).foregroundStyle(Theme.text)
+            .padding(.horizontal, 8).padding(.vertical, 2)
+            .background(Theme.chrome, in: Capsule())
+    }
+
+    private func shortHash(_ hash: String) -> String { String(hash.prefix(7)) }
 }
 
 struct BranchesView: View {
     @ObservedObject var model: AppModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 0) {
+            PageHeading("分支", subtitle: "切换或创建本地分支") {
+                HStack(spacing: 6) {
+                    MenuGitField(placeholder: "例如 feature/new-ui", text: $model.branchName, width: 170)
+                    Button("＋ 新建分支") { model.createBranch() }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(model.branchName.trimmingCharacters(in: .whitespaces).isEmpty || model.busy)
+                }
+            }
+            Rectangle().fill(Theme.hairline).frame(height: 1)
             if let status = model.status, !status.files.isEmpty {
-                Text("工作区有 \(status.files.count) 个未提交更改。MenuGit 不会自动暂存或丢弃；Git 判断会覆盖修改时会阻止切换。")
-                    .font(.caption).foregroundStyle(.orange)
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle").font(.system(size: 10))
+                    Text("工作区有 \(status.files.count) 个未提交更改。MenuGit 不会自动暂存或丢弃；Git 判断会覆盖修改时会阻止切换。")
+                        .font(.system(size: 10))
+                }
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 16).padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.07))
+                Rectangle().fill(Theme.hairline).frame(height: 1)
             }
-            List {
-                Section("本地分支") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    sectionCaption("本地分支")
                     ForEach(model.localBranches, id: \.self) { branch in
-                        HStack {
-                            Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
-                            Text(branch)
-                            Spacer()
-                            if branch == model.status?.branch { Text("当前").foregroundStyle(.green) }
-                            else { Button("切换") { model.switchBranch(branch) } }
+                        branchRow(branch)
+                        Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 8)
+                    }
+                    if model.localBranches.isEmpty {
+                        emptyRow("没有本地分支。")
+                    }
+                    sectionCaption("远程分支").padding(.top, 14)
+                    if model.remoteBranches.isEmpty {
+                        emptyRow("没有可用的远程分支；配置远端并推送后可在这里检出。")
+                    } else {
+                        ForEach(model.remoteBranches, id: \.self) { branch in
+                            remoteRow(branch)
+                            Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 8)
                         }
                     }
                 }
-                Section("远程分支") {
-                    ForEach(model.remoteBranches, id: \.self) { branch in
-                        HStack {
-                            Text(branch)
-                            Spacer()
-                            if let local = localName(for: branch), model.localBranches.contains(local) {
-                                Text("已有本地分支 \(local)").foregroundStyle(.secondary)
-                            } else {
-                                Button("检出为跟踪分支") { model.switchBranch(branch, isRemote: true) }
-                            }
-                        }
-                    }
-                }
+                .padding(.horizontal, 13).padding(.vertical, 10)
             }
-            HStack {
-                TextField("例如 feature/new-ui", text: $model.branchName)
-                Button("创建并切换") { model.createBranch() }.buttonStyle(.borderedProminent).disabled(model.branchName.isEmpty)
-            }.padding(.top, 8)
-        }.padding(16)
+        }
+    }
+
+    private func branchRow(_ branch: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+            Text(branch).font(.system(size: 11, design: .monospaced))
+            Spacer()
+            if branch == model.status?.branch {
+                Text("当前分支")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(Theme.addedText)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Theme.addedBackground, in: Capsule())
+            } else {
+                Button("切换") { model.switchBranch(branch) }.buttonStyle(OutlineButtonStyle())
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 7)
+    }
+
+    private func remoteRow(_ branch: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 10.5)).foregroundStyle(.purple.opacity(0.75))
+            Text(branch).font(.system(size: 11, design: .monospaced))
+            Spacer()
+            if let local = localName(for: branch), model.localBranches.contains(local) {
+                Text("已有本地分支 \(local)").font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+            } else {
+                Button("检出为跟踪分支") { model.switchBranch(branch, isRemote: true) }
+                    .buttonStyle(OutlineButtonStyle())
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 7)
+    }
+
+    private func sectionCaption(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium)).tracking(0.5).foregroundStyle(Theme.muted)
+            .padding(.horizontal, 8).padding(.vertical, 5)
+    }
+
+    private func emptyRow(_ text: String) -> some View {
+        Text(text).font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+            .padding(.horizontal, 8).padding(.vertical, 8)
     }
 
     private func localName(for remoteBranch: String) -> String? {
@@ -437,116 +1075,310 @@ struct HistoryView: View {
     private var filtered: [CommitRecord] {
         model.commits.filter { search.isEmpty || ($0.subject + $0.author).localizedCaseInsensitiveContains(search) }
     }
+    private var branch: String { model.status?.branch ?? "" }
+
     var body: some View {
-        VStack(spacing: 8) {
-            TextField("搜索提交信息或作者", text: $search)
+        VStack(spacing: 0) {
+            PageHeading("历史", subtitle: "\(branch) 分支 · 最近提交") {
+                MenuGitField(placeholder: "搜索提交信息或作者", text: $search, width: 210)
+            }
+            Rectangle().fill(Theme.hairline).frame(height: 1)
             HSplitView {
                 VStack(spacing: 0) {
-                    List(filtered) { commit in
-                        Button { model.showCommit(commit) } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(commit.subject).fontWeight(.medium)
-                                Text("\(commit.id) · \(commit.author) · \(commit.date)").font(.caption).foregroundStyle(.secondary)
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(filtered) { commit in
+                                historyRow(commit)
+                                Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 8)
                             }
-                        }.buttonStyle(.plain)
+                            if filtered.isEmpty {
+                                Text(search.isEmpty ? "没有提交记录。" : "没有匹配的提交。")
+                                    .font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 18)
+                            }
+                        }
                     }
                     if model.historyHasMore, search.isEmpty {
-                        Button("加载更早的提交") { model.loadMoreHistory() }.padding(6)
+                        Rectangle().fill(Theme.hairline).frame(height: 1)
+                        Button("加载更早的提交") { model.loadMoreHistory() }
+                            .buttonStyle(OutlineButtonStyle())
+                            .padding(8)
                     }
-                }.frame(minWidth: 280)
-                ScrollView([.horizontal, .vertical]) {
-                    Text(model.commitDetail.isEmpty ? "选择提交查看详情。" : model.commitDetail)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }.frame(minWidth: 300)
+                }
+                .frame(minWidth: 290)
+
+                detailPane.frame(minWidth: 300)
             }
-        }.padding(16)
+        }
+    }
+
+    private func historyRow(_ commit: CommitRecord) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Text(commit.id)
+                .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.muted)
+                .frame(width: 62, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(commit.subject).font(.system(size: 11, weight: .medium)).lineLimit(2)
+                Text(commit.author).font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 4)
+            Text(commit.date)
+                .font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 8)
+        .background(model.selectedCommit?.id == commit.id ? Theme.rowSelected : .clear)
+        .contentShape(Rectangle())
+        .onTapGesture { model.showCommit(commit) }
+    }
+
+    private var detailPane: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text(model.selectedCommit.map { "\($0.id) · \($0.subject)" } ?? "提交详情")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer()
+            }
+            .padding(.horizontal, 9).padding(.vertical, 6)
+            .background(Theme.chrome)
+            Rectangle().fill(Theme.border).frame(height: 1)
+            ScrollView {
+                Text(detailText)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Theme.text)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+            }
+            .background(Theme.diff)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.border, lineWidth: 1))
+        .padding(10)
+    }
+
+    private var detailText: String {
+        guard model.selectedCommit != nil else { return "选择提交查看详情。" }
+        guard !model.commitDetail.isEmpty else { return "正在读取提交详情…" }
+        let limit = 60_000
+        guard model.commitDetail.count > limit else { return model.commitDetail }
+        return String(model.commitDetail.prefix(limit)) + "\n…（内容过大，仅显示前 60,000 个字符）"
     }
 }
 
 struct CreateView: View {
     @ObservedObject var model: AppModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("在此创建 Git 仓库").font(.title2.bold())
-            Text(model.targetDirectory.path).textSelection(.enabled)
-            Button("选择其他目录") { model.chooseCloneDirectory() }
-            Text("将初始化所选目录。若该目录已属于仓库，操作会被阻止。").foregroundStyle(.secondary)
-            Button("初始化") { model.initialize() }.buttonStyle(.borderedProminent)
-            Spacer()
-        }.padding(24)
+        VStack(spacing: 0) {
+            PageHeading("新建仓库", subtitle: "在此目录初始化 Git 仓库")
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionCard(title: "位置") {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder").font(.system(size: 11)).foregroundStyle(Theme.muted)
+                            Text(model.targetDirectory.path)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            Button("选择其他目录…") { model.chooseCloneDirectory() }
+                                .buttonStyle(OutlineButtonStyle())
+                        }
+                        .padding(12)
+                    }
+                    Text("将初始化所选目录。若该目录已属于仓库，操作会被阻止。")
+                        .font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                    HStack {
+                        Spacer()
+                        Button("初始化") { model.initialize() }
+                            .buttonStyle(PrimaryButtonStyle())
+                            .disabled(model.busy)
+                    }
+                }
+                .frame(maxWidth: 620)
+                .frame(maxWidth: .infinity)
+                .padding(18)
+            }
+        }
     }
 }
 
 struct CloneView: View {
     @ObservedObject var model: AppModel
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("克隆仓库").font(.title2.bold())
-            TextField("HTTPS 或 SSH 仓库地址", text: $model.cloneURL).onChange(of: model.cloneURL) { _ in model.suggestedCloneName() }
-            TextField("新建文件夹名称", text: $model.cloneName)
-            HStack {
-                Text("目标目录：\(model.targetDirectory.path)").foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                Button("选择…") { model.chooseCloneDirectory() }.disabled(model.cloning)
+        VStack(spacing: 0) {
+            PageHeading("克隆仓库", subtitle: "从 HTTPS 或 SSH 地址克隆到本地")
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionCard(title: "来源") {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 10) {
+                                Text("地址").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                    .frame(width: 46, alignment: .leading)
+                                MenuGitField(placeholder: "HTTPS 或 SSH 仓库地址", text: $model.cloneURL)
+                                    .onChange(of: model.cloneURL) { _ in model.suggestedCloneName() }
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            Rectangle().fill(Theme.hairline).frame(height: 1)
+                            HStack(spacing: 10) {
+                                Text("文件夹").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                    .frame(width: 46, alignment: .leading)
+                                MenuGitField(placeholder: "新建文件夹名称", text: $model.cloneName, width: 230)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            Rectangle().fill(Theme.hairline).frame(height: 1)
+                            HStack(spacing: 10) {
+                                Text("目录").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                    .frame(width: 46, alignment: .leading)
+                                Text(model.targetDirectory.path)
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .foregroundStyle(Theme.text)
+                                    .lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Button("选择…") { model.chooseCloneDirectory() }
+                                    .buttonStyle(OutlineButtonStyle())
+                                    .disabled(model.cloning)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                        }
+                    }
+                    if model.cloning {
+                        SectionCard(title: "进度") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let percent = model.clonePercent { ProgressView(value: percent) }
+                                else { ProgressView() }
+                                Text(model.cloneProgress)
+                                    .font(.system(size: 9.5, design: .monospaced))
+                                    .lineLimit(2).foregroundStyle(Theme.muted)
+                            }
+                            .padding(.horizontal, 12).padding(.bottom, 10)
+                        }
+                    }
+                    HStack {
+                        Spacer()
+                        if model.cloning {
+                            Button("取消克隆") { model.cancelClone() }.buttonStyle(OutlineButtonStyle())
+                        } else {
+                            Button("克隆") { model.startClone() }
+                                .buttonStyle(PrimaryButtonStyle())
+                                .disabled(model.cloneURL.trimmingCharacters(in: .whitespaces).isEmpty
+                                          || model.cloneName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                    }
+                }
+                .frame(maxWidth: 620)
+                .frame(maxWidth: .infinity)
+                .padding(18)
             }
-            if model.cloning {
-                if let percent = model.clonePercent { ProgressView(value: percent) }
-                else { ProgressView() }
-                Text(model.cloneProgress).font(.system(.caption, design: .monospaced)).lineLimit(2).foregroundStyle(.secondary)
-                Button("取消克隆") { model.cancelClone() }
-            } else {
-                Button("克隆") { model.startClone() }.buttonStyle(.borderedProminent)
-            }
-            Spacer()
-        }.padding(24)
+        }
     }
 }
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("MenuGit 设置").font(.title2.bold())
-            HStack {
-                Text("Finder 扩展")
-                Spacer()
-                Text(model.extensionEnabled ? "已启用" : "未启用").foregroundStyle(model.extensionEnabled ? .green : .orange)
-                Button("打开系统设置") { model.openExtensionSettings() }
-                Button("刷新状态") { model.refreshExtensionStatus() }
+        VStack(spacing: 0) {
+            PageHeading("设置", subtitle: "Finder 扩展、诊断与最近仓库")
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionCard(title: "Finder 扩展") {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 9) {
+                                Circle()
+                                    .fill(model.extensionEnabled ? Color.green : Color.orange)
+                                    .frame(width: 7, height: 7)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Finder 右键菜单").font(.system(size: 11, weight: .medium))
+                                    Text(model.extensionEnabled ? "已启用，可在 Finder 中右键使用 MenuGit。" : "尚未启用。")
+                                        .font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                                }
+                                Spacer(minLength: 8)
+                                Button("打开系统设置") { model.openExtensionSettings() }.buttonStyle(OutlineButtonStyle())
+                                Button("刷新状态") { model.refreshExtensionStatus() }.buttonStyle(OutlineButtonStyle())
+                            }
+                            .padding(12)
+                            if !model.extensionEnabled {
+                                Rectangle().fill(Theme.hairline).frame(height: 1)
+                                Text("在“系统设置 → 通用 → 登录项与扩展 → Finder 扩展”中启用 MenuGit。")
+                                    .font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+
+                    SectionCard(title: "仓库与凭证") {
+                        Text("MenuGit 使用系统 Git、凭证助手、SSH agent 和 Git hooks，不保存账号凭证，不修改全局 Git 配置。")
+                            .font(.system(size: 10)).foregroundStyle(Theme.muted)
+                            .padding(.horizontal, 12).padding(.bottom, 11)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    SectionCard(title: "本机诊断信息") {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 8) {
+                                Text(model.gitVersion.isEmpty ? "Git 版本未知" : model.gitVersion)
+                                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(Theme.muted)
+                                    .lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Button("复制") { model.copyDiagnostics() }.buttonStyle(OutlineButtonStyle())
+                            }
+                            .padding(.horizontal, 12).padding(.bottom, 8)
+                            Rectangle().fill(Theme.hairline).frame(height: 1)
+                            ScrollView {
+                                Text(model.diagnostics())
+                                    .font(.system(size: 9.5, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(12)
+                            }
+                            .frame(maxHeight: 140)
+                        }
+                    }
+
+                    SectionCard(title: "最近仓库") {
+                        HStack(spacing: 8) {
+                            Text("\(model.recentRepositories.count) 个").font(.system(size: 10.5))
+                            Spacer(minLength: 8)
+                            Button("清除") { model.clearRecent() }.buttonStyle(OutlineButtonStyle())
+                        }
+                        .padding(.horizontal, 12).padding(.bottom, 10)
+                    }
+
+                    SectionCard(title: "关于 MenuGit") {
+                        VStack(spacing: 0) {
+                            HStack {
+                                Text("版本").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                Spacer()
+                                Text(version).font(.system(size: 10.5, design: .monospaced))
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            Rectangle().fill(Theme.hairline).frame(height: 1)
+                            HStack {
+                                Text("检查更新").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                Spacer()
+                                Text("更新地址待设置").font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                        }
+                    }
+                }
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+                .padding(18)
             }
-            if !model.extensionEnabled {
-                Text("在“系统设置 → 通用 → 登录项与扩展 → Finder 扩展”中启用 MenuGit。").font(.caption).foregroundStyle(.secondary)
-            }
-            Divider()
-            Text("MenuGit 使用系统 Git、凭证助手、SSH agent 和 Git hooks，不保存账号凭证，不修改全局 Git 配置。").font(.caption).foregroundStyle(.secondary)
-            Divider()
-            HStack {
-                Text("本机诊断信息")
-                Spacer()
-                Button("复制") { model.copyDiagnostics() }
-            }
-            Text(model.diagnostics()).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-            Divider()
-            HStack {
-                Text("最近仓库")
-                Spacer()
-                Text("\(model.recentRepositories.count) 个").foregroundStyle(.secondary)
-                Button("清除") { model.clearRecent() }
-            }
-            Divider()
-            HStack {
-                Text("关于 MenuGit")
-                Spacer()
-                Text("版本 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0")").foregroundStyle(.secondary)
-            }
-            HStack {
-                Text("检查更新")
-                Spacer()
-                Text("更新地址待设置").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-        }.padding(24)
+        }
     }
 }
 
@@ -570,14 +1402,16 @@ struct ConflictsView: View {
                     Spacer()
                     Button("撤销选择") { model.undoConflict() }.disabled(draft?.undo.isEmpty ?? true)
                 }
-                HSplitView {
-                    sidebar.frame(minWidth: 220, idealWidth: 262, maxWidth: 320)
-                    detail.frame(minWidth: 380)
+                HStack(spacing: 12) {
+                    sidebar.frame(width: 250)
+                    detail.frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 HStack(spacing: 10) {
                     Button("中止\(operationName)") { model.abortConflict() }
-                    Text("编辑中的文件需先保存或取消；二进制文件只能选择整份版本。").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
+                    Text("编辑中的文件需先保存或取消；二进制文件只能选择整份版本。")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 6)
                     Button("继续\(operationName)") { model.continueConflict() }.buttonStyle(.borderedProminent)
                         .disabled(!files.isEmpty)
                         .opacity(files.isEmpty ? 1 : 0.45)
@@ -759,7 +1593,8 @@ struct ConflictsView: View {
         return HStack {
             Text("已处理 \(draft.choices.count - unresolved) / \(draft.choices.count) 处").font(.caption).foregroundStyle(.secondary)
             Text("每处冲突选择一侧或保留两边；仍含冲突标记时不会写入。").font(.caption).foregroundStyle(.secondary)
-            Spacer()
+                .lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 6)
             Button("编辑结果") { model.editConflict() }.disabled(unresolved > 0 || draft.editing)
             Button("保存并标记解决") { model.saveConflict() }.buttonStyle(.borderedProminent)
                 .disabled(unresolved > 0)

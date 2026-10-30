@@ -29,6 +29,20 @@ final class SpecComplianceTests: XCTestCase {
         try git.require(["commit", "-qm", message], at: directory)
     }
 
+    func testRemoteBranchListingSkipsRemoteHeadSymbolicRef() throws {
+        try write("a.txt", "base\n"); try commitAll()
+        let bare = directory.deletingLastPathComponent().appendingPathComponent("MenuGit-bare-" + UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: bare) }
+        try git.require(["init", "-q", "--bare", bare.path], at: directory)
+        try git.require(["remote", "add", "origin", bare.path], at: directory)
+        try git.require(["push", "-q", "origin", "HEAD"], at: directory)
+        _ = try? git.require(["remote", "set-head", "origin", "--auto"], at: directory)
+        let current = try git.require(["rev-parse", "--abbrev-ref", "HEAD"], at: directory).output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let branches = try repository.branches()
+        XCTAssertFalse(branches.remote.contains("origin"))
+        XCTAssertTrue(branches.remote.contains("origin/\(current)"))
+    }
+
     func testRenameIsOneLogicalChange() throws {
         try write("a.txt", "base\n"); try commitAll()
         try git.require(["mv", "a.txt", "b.txt"], at: directory)
